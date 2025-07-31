@@ -15,7 +15,7 @@ export default function BabyCursor() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [openFiles, setOpenFiles] = useState<{[key: string]: string}>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshingFiles, setIsRefreshingFiles] = useState(false);
+
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const [queuedMessages, setQueuedMessages] = useState<Array<{
     id: string;
@@ -101,8 +101,6 @@ Happy coding! 🚀`
     try {
       if (isInitialLoad) {
         setIsLoading(true);
-      } else {
-        setIsRefreshingFiles(true);
       }
       
       const fileList = await listFiles();
@@ -117,8 +115,6 @@ Happy coding! 🚀`
     } finally {
       if (isInitialLoad) {
         setIsLoading(false);
-      } else {
-        setIsRefreshingFiles(false);
       }
     }
   }, [initializeSampleFiles]);
@@ -158,28 +154,7 @@ Happy coding! 🚀`
     }
   };
 
-  const refreshFileContents = async () => {
-    try {
-      // Get fresh file list
-      const updatedFiles = await listFiles();
-      setFiles(updatedFiles);
-      
-      // Update content of any currently open files that might have been modified by AI
-      const openFileNames = Object.keys(openFiles);
-      const updatedOpenFiles = { ...openFiles };
-      
-      for (const fileName of openFileNames) {
-        const updatedFile = updatedFiles.find(f => f.name === fileName);
-        if (updatedFile && updatedFile.content !== undefined) {
-          updatedOpenFiles[fileName] = updatedFile.content;
-        }
-      }
-      
-      setOpenFiles(updatedOpenFiles);
-    } catch (error) {
-      console.error('Failed to refresh file contents:', error);
-    }
-  };
+
 
   const handleAddQueuedMessage = (element: string, message: string) => {
     const newMessage = {

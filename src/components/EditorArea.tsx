@@ -21,7 +21,7 @@ async function processHTMLForPreviewAsync(htmlContent: string, openFiles: {[key:
   if (workspaceMode === 'remote') {
     console.log('processHTMLForPreviewAsync: Processing for remote mode');
     // Rewrite relative asset URLs to use workspace assets endpoint
-    let processedHTML = htmlContent
+    const processedHTML = htmlContent
       .replace(/href=["'](?!https?:\/\/|\/\/|\/api\/)([^"']+\.css)["']/gm, 'href="/api/workspace-assets/$1"')
       .replace(/src=["'](?!https?:\/\/|\/\/|\/api\/)([^"']+\.js)["']/gm, 'src="/api/workspace-assets/$1"')
       .replace(/src=["'](?!https?:\/\/|\/\/|\/api\/)([^"']+\.(png|jpg|jpeg|gif|svg|ico))["']/gm, 'src="/api/workspace-assets/$1"');
@@ -59,8 +59,10 @@ async function processHTMLForPreviewAsync(htmlContent: string, openFiles: {[key:
         try {
           console.log('processHTMLForPreviewAsync: Reading CSS from local folder:', cssFile);
           const localFile = await getLocalFile(cssFile);
-          cssContent = localFile.content;
-          console.log('processHTMLForPreviewAsync: Successfully read CSS from local folder');
+          if (localFile.content) {
+            cssContent = localFile.content;
+            console.log('processHTMLForPreviewAsync: Successfully read CSS from local folder');
+          }
         } catch (error) {
           console.warn(`processHTMLForPreviewAsync: Failed to read CSS file "${cssFile}" from local folder:`, error);
         }
@@ -92,8 +94,10 @@ async function processHTMLForPreviewAsync(htmlContent: string, openFiles: {[key:
         try {
           console.log('processHTMLForPreviewAsync: Reading JS from local folder:', jsFile);
           const localFile = await getLocalFile(jsFile);
-          jsContent = localFile.content;
-          console.log('processHTMLForPreviewAsync: Successfully read JS from local folder');
+          if (localFile.content) {
+            jsContent = localFile.content;
+            console.log('processHTMLForPreviewAsync: Successfully read JS from local folder');
+          }
         } catch (error) {
           console.warn(`processHTMLForPreviewAsync: Failed to read JS file "${jsFile}" from local folder:`, error);
         }
@@ -119,7 +123,7 @@ async function processHTMLForPreviewAsync(htmlContent: string, openFiles: {[key:
 }
 
 // Fallback sync version for immediate display
-function processHTMLForPreviewSync(htmlContent: string, openFiles: {[key: string]: string}): string {
+function processHTMLForPreviewSync(htmlContent: string): string {
   const workspaceMode = getWorkspaceMode();
   
   if (workspaceMode === 'remote') {
@@ -153,7 +157,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
   } | null>(null);
   const [promptMessage, setPromptMessage] = useState('');
   const [processedHTML, setProcessedHTML] = useState<string>('');
-  const [isProcessingHTML, setIsProcessingHTML] = useState(false);
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
   const currentFileContent = openFiles[activeFile];
@@ -264,25 +268,20 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
   // Process HTML when content changes or view changes to preview
   useEffect(() => {
     if (activeFile?.endsWith('.html') && currentFileContent && (activeView === 'preview' || activeView === 'split')) {
-      setIsProcessingHTML(true);
-      
       // Start with sync version for immediate display
-      const syncProcessed = processHTMLForPreviewSync(currentFileContent, openFiles);
+      const syncProcessed = processHTMLForPreviewSync(currentFileContent);
       setProcessedHTML(syncProcessed);
       
       // Then process async for better local file handling
       processHTMLForPreviewAsync(currentFileContent, openFiles)
         .then(processed => {
           setProcessedHTML(processed);
-          setIsProcessingHTML(false);
         })
         .catch(error => {
           console.error('Error processing HTML:', error);
-          setIsProcessingHTML(false);
         });
     } else {
       setProcessedHTML('');
-      setIsProcessingHTML(false);
     }
   }, [currentFileContent, openFiles, activeView, activeFile]);
 
