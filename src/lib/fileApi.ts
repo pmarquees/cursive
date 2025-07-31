@@ -142,3 +142,41 @@ export async function getFile(path: string): Promise<FileItem> {
   }
   return response.json();
 }
+
+// Workspace type detection
+export type WorkspaceType = 'html' | 'nextjs' | 'unknown';
+
+export async function detectWorkspaceType(): Promise<WorkspaceType> {
+  try {
+    // Check for package.json
+    const packageJsonFile = await getFile('package.json').catch(() => null);
+    
+    if (packageJsonFile && packageJsonFile.content) {
+      try {
+        const packageJson = JSON.parse(packageJsonFile.content);
+        
+        // Check if Next.js is in dependencies
+        const hasNextJs = packageJson.dependencies?.next || packageJson.devDependencies?.next;
+        
+        if (hasNextJs) {
+          return 'nextjs';
+        }
+      } catch (error) {
+        console.warn('Error parsing package.json:', error);
+      }
+    }
+    
+    // Check for HTML files at root level
+    const files = await listFiles('');
+    const hasHtmlFiles = files.some(file => file.name.endsWith('.html'));
+    
+    if (hasHtmlFiles) {
+      return 'html';
+    }
+    
+    return 'unknown';
+  } catch (error) {
+    console.error('Error detecting workspace type:', error);
+    return 'unknown';
+  }
+}

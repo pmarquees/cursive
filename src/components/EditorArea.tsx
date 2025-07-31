@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, ArrowRight, Settings, MessageSquare, X, File, Maximize2, Minimize2, Eye, Send } from 'lucide-react';
-import { getWorkspaceMode } from '@/lib/fileApi';
+import { ArrowLeft, ArrowRight, Settings, MessageSquare, X, File, Maximize2, Minimize2, Eye, Send, Play, Square, Loader2 } from 'lucide-react';
+import { getWorkspaceMode, detectWorkspaceType, WorkspaceType } from '@/lib/fileApi';
 import { getLocalFile } from '@/lib/localFileApi';
 
 const MonacoEditor = dynamic(
@@ -136,6 +136,74 @@ function processHTMLForPreviewSync(htmlContent: string): string {
   return htmlContent;
 }
 
+// Next.js Development Server Management
+interface DevServerState {
+  isRunning: boolean;
+  url: string | null;
+  port: number | null;
+  isStarting: boolean;
+  isStopping: boolean;
+  error: string | null;
+}
+
+async function startNextJsServer(): Promise<{ success: boolean; url?: string; port?: number; error?: string }> {
+  try {
+    const response = await fetch('/api/dev-server/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        workspacePath: null // Use default workspace
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return { success: false, error: data.error || 'Failed to start server' };
+    }
+    
+    return { 
+      success: true, 
+      url: data.url, 
+      port: data.port 
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+async function stopNextJsServer(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch('/api/dev-server/stop', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        workspacePath: null // Use default workspace
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return { success: false, error: data.error || 'Failed to stop server' };
+    }
+    
+    return { success: true };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
 interface EditorAreaProps {
   openFiles: {[key: string]: string};
   activeFile: string;
@@ -157,6 +225,17 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
   } | null>(null);
   const [promptMessage, setPromptMessage] = useState('');
   const [processedHTML, setProcessedHTML] = useState<string>('');
+  
+  // Next.js server state
+  const [workspaceType, setWorkspaceType] = useState<WorkspaceType>('unknown');
+  const [devServer, setDevServer] = useState<DevServerState>({
+    isRunning: false,
+    url: null,
+    port: null,
+    isStarting: false,
+    isStopping: false,
+    error: null
+  });
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
@@ -284,6 +363,61 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
       setProcessedHTML('');
     }
   }, [currentFileContent, openFiles, activeView, activeFile]);
+
+  // Detect workspace type on mount and when files change
+  useEffect(() => {
+    detectWorkspaceType().then(type => {
+      console.log('Detected workspace type:', type);
+      setWorkspaceType(type);
+    });
+  }, [openFiles]);
+
+  // Server management handlers
+  const handleStartServer = async () => {
+    setDevServer(prev => ({ ...prev, isStarting: true, error: null }));
+    
+    const result = await startNextJsServer();
+    
+    if (result.success && result.url && result.port) {
+      setDevServer({
+        isRunning: true,
+        url: result.url,
+        port: result.port,
+        isStarting: false,
+        isStopping: false,
+        error: null
+      });
+    } else {
+      setDevServer(prev => ({
+        ...prev,
+        isStarting: false,
+        error: result.error || 'Failed to start server'
+      }));
+    }
+  };
+
+  const handleStopServer = async () => {
+    setDevServer(prev => ({ ...prev, isStopping: true, error: null }));
+    
+    const result = await stopNextJsServer();
+    
+    if (result.success) {
+      setDevServer({
+        isRunning: false,
+        url: null,
+        port: null,
+        isStarting: false,
+        isStopping: false,
+        error: null
+      });
+    } else {
+      setDevServer(prev => ({
+        ...prev,
+        isStopping: false,
+        error: result.error || 'Failed to stop server'
+      }));
+    }
+  };
 
   const getElementInfo = (element: HTMLElement): string => {
     const tagName = element.tagName.toLowerCase();
@@ -445,23 +579,80 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
         
         {activeView === 'preview' && (
           <div className="w-full h-full bg-white relative">
-            {activeFile?.endsWith('.html') && currentFileContent ? (
+            {/* Next.js Preview */}
+            {workspaceType === 'nextjs' ? (
               <>
-                <iframe
-                  ref={iframeRef}
-                  srcDoc={processedHTML || currentFileContent}
-                  className="w-full h-full border-none"
-                  title="Preview"
-                />
-                {/* Inspection Mode Indicator */}
-                {isInspectionMode && (
-                  <div className="absolute top-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-2">
-                    <Eye size={16} />
-                    Inspection Mode (Press ESC to exit)
+                {devServer.isRunning && devServer.url ? (
+                  <>
+                    <iframe
+                      ref={iframeRef}
+                      src={devServer.url}
+                      className="w-full h-full border-none"
+                      title="Next.js Preview"
+                    />
+                    
+                    {/* Server Status Indicator */}
+                    <div className="absolute top-2 left-2 bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+                      Running on {devServer.url}
+                    </div>
+                    
+                    {/* Stop Server Button */}
+                    <button
+                      onClick={handleStopServer}
+                      disabled={devServer.isStopping}
+                      className="absolute top-2 right-12 p-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed"
+                      title="Stop Development Server"
+                    >
+                      {devServer.isStopping ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Square size={16} />
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <div className="mb-6">
+                      <h3 className="text-xl font-semibold text-gray-800 mb-2">Next.js Application</h3>
+                      <p className="text-muted-foreground">
+                        Start the development server to preview your Next.js application with full routing and interactivity.
+                      </p>
+                    </div>
+                    
+                    {devServer.error && (
+                      <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm max-w-md">
+                        <strong>Error:</strong> {devServer.error}
+                      </div>
+                    )}
+                    
+                    <button
+                      onClick={handleStartServer}
+                      disabled={devServer.isStarting}
+                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed"
+                    >
+                      {devServer.isStarting ? (
+                        <>
+                          <Loader2 size={20} className="animate-spin" />
+                          Starting Server...
+                        </>
+                      ) : (
+                        <>
+                          <Play size={20} />
+                          Start Development Server
+                        </>
+                      )}
+                    </button>
+                    
+                    {getWorkspaceMode() === 'local' && (
+                      <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm max-w-md">
+                        <strong>Local Mode:</strong> Make sure you have Node.js installed and run <code className="bg-amber-100 px-1 rounded">npm install</code> in your workspace folder first.
+                      </div>
+                    )}
                   </div>
                 )}
                 
-                {/* Fullscreen Toggle Button - Top right of preview area */}
+                {/* Fullscreen Toggle Button */}
                 <button
                   onClick={onTogglePreviewFullscreen}
                   className="absolute top-2 right-2 p-3 bg-black hover:bg-black/80 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105"
@@ -476,9 +667,42 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                 </button>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                Preview not available for this file type
-              </div>
+              /* HTML Preview */
+              activeFile?.endsWith('.html') && currentFileContent ? (
+                <>
+                  <iframe
+                    ref={iframeRef}
+                    srcDoc={processedHTML || currentFileContent}
+                    className="w-full h-full border-none"
+                    title="Preview"
+                  />
+                  {/* Inspection Mode Indicator */}
+                  {isInspectionMode && (
+                    <div className="absolute top-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-2">
+                      <Eye size={16} />
+                      Inspection Mode (Press ESC to exit)
+                    </div>
+                  )}
+                  
+                  {/* Fullscreen Toggle Button */}
+                  <button
+                    onClick={onTogglePreviewFullscreen}
+                    className="absolute top-2 right-2 p-3 bg-black hover:bg-black/80 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105"
+                    title={isPreviewFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                    style={{ zIndex: 99999, backgroundColor: '#000000' }}
+                  >
+                    {isPreviewFullscreen ? (
+                      <Minimize2 size={16} />
+                    ) : (
+                      <Maximize2 size={16} />
+                    )}
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  {workspaceType === 'unknown' ? 'Detecting workspace type...' : 'Preview not available for this file type'}
+                </div>
+              )
             )}
           </div>
         )}
@@ -511,23 +735,74 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
               )}
             </div>
             <div className="w-1/2 h-full border-l border-border bg-white relative">
-              {activeFile?.endsWith('.html') && currentFileContent ? (
+              {/* Next.js Preview in Split View */}
+              {workspaceType === 'nextjs' ? (
                 <>
-                  <iframe
-                    ref={activeView === 'split' ? iframeRef : undefined}
-                    srcDoc={processedHTML || currentFileContent}
-                    className="w-full h-full border-none"
-                    title="Preview"
-                  />
-                  {/* Inspection Mode Indicator */}
-                  {isInspectionMode && (
-                    <div className="absolute top-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-2">
-                      <Eye size={16} />
-                      Inspection Mode (Press ESC to exit)
+                  {devServer.isRunning && devServer.url ? (
+                    <>
+                      <iframe
+                        ref={activeView === 'split' ? iframeRef : undefined}
+                        src={devServer.url}
+                        className="w-full h-full border-none"
+                        title="Next.js Preview"
+                      />
+                      
+                      {/* Server Status Indicator */}
+                      <div className="absolute top-2 left-2 bg-green-600 text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
+                        <div className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse"></div>
+                        Running
+                      </div>
+                      
+                      {/* Stop Server Button */}
+                      <button
+                        onClick={handleStopServer}
+                        disabled={devServer.isStopping}
+                        className="absolute top-2 right-8 p-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed"
+                        title="Stop Development Server"
+                      >
+                        {devServer.isStopping ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Square size={12} />
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                      <div className="mb-4">
+                        <h4 className="text-lg font-semibold text-gray-800 mb-1">Next.js App</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Start server to preview
+                        </p>
+                      </div>
+                      
+                      {devServer.error && (
+                        <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded text-red-700 text-xs max-w-xs">
+                          <strong>Error:</strong> {devServer.error}
+                        </div>
+                      )}
+                      
+                      <button
+                        onClick={handleStartServer}
+                        disabled={devServer.isStarting}
+                        className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed text-sm"
+                      >
+                        {devServer.isStarting ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Starting...
+                          </>
+                        ) : (
+                          <>
+                            <Play size={14} />
+                            Start Server
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
                   
-                  {/* Fullscreen Toggle Button - Top right of preview area */}
+                  {/* Fullscreen Toggle Button */}
                   <button
                     onClick={onTogglePreviewFullscreen}
                     className="absolute top-2 right-2 p-3 bg-black hover:bg-black/80 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105"
@@ -542,9 +817,42 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                   </button>
                 </>
               ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  Preview not available for this file type
-                </div>
+                /* HTML Preview in Split View */
+                activeFile?.endsWith('.html') && currentFileContent ? (
+                  <>
+                    <iframe
+                      ref={activeView === 'split' ? iframeRef : undefined}
+                      srcDoc={processedHTML || currentFileContent}
+                      className="w-full h-full border-none"
+                      title="Preview"
+                    />
+                    {/* Inspection Mode Indicator */}
+                    {isInspectionMode && (
+                      <div className="absolute top-2 left-2 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-medium flex items-center gap-2">
+                        <Eye size={16} />
+                        Inspection Mode (Press ESC to exit)
+                      </div>
+                    )}
+                    
+                    {/* Fullscreen Toggle Button */}
+                    <button
+                      onClick={onTogglePreviewFullscreen}
+                      className="absolute top-2 right-2 p-3 bg-black hover:bg-black/80 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105"
+                      title={isPreviewFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                      style={{ zIndex: 99999, backgroundColor: '#000000' }}
+                    >
+                      {isPreviewFullscreen ? (
+                        <Minimize2 size={16} />
+                      ) : (
+                        <Maximize2 size={16} />
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    {workspaceType === 'unknown' ? 'Detecting workspace type...' : 'Preview not available for this file type'}
+                  </div>
+                )
               )}
             </div>
           </div>
