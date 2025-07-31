@@ -1,0 +1,1 @@
+self.__BUILD_MANIFEST = {"__rewrites":{"afterFiles":[{"source":"/:path*.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)","destination":"/api/workspace-assets/:path*"}],"beforeFiles":[],"fallback":[]},"/_app":["static/chunks/pages/_app.js"],"/_error":["static/chunks/pages/_error.js"],"sortedPages":["/_app","/_error"]};self.__BUILD_MANIFEST_CB && self.__BUILD_MANIFEST_CB()
