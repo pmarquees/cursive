@@ -12,7 +12,10 @@ function createWindow() {
     height: 900,
     minWidth: 1000,
     minHeight: 600,
-    titleBarStyle: 'hiddenInset', // macOS style title bar
+    titleBarStyle: 'hiddenInset', // Use custom title bar
+    title: 'Cursive',
+    backgroundColor: '#737373', // Match app background color
+    vibrancy: 'content', // macOS vibrancy effect
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

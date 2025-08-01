@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { EditorArea } from '@/components/EditorArea';
 import { ChatPanel } from '@/components/ChatPanel';
 import { StatusBar } from '@/components/StatusBar';
+import { TitleBar } from '@/components/TitleBar';
 import { FileItem, listFiles, saveFile, createFile, deleteFile, setWorkspaceMode, getWorkspaceInfo } from '@/lib/fileApi';
 import { connectToLocalFolder, isFileSystemAccessSupported } from '@/lib/localFileApi';
 
@@ -246,6 +247,9 @@ Happy coding! 🚀`
 
   return (
     <div className="flex flex-col h-dvh bg-background text-foreground pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] overflow-hidden">
+      {/* Custom Title Bar */}
+      <TitleBar activeFile={activeFile} workspaceName={workspaceInfo.name} />
+      
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         {!isPreviewFullscreen && (

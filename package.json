@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && NODE_ENV=development electron .\"",
     "build-electron": "ELECTRON_BUILD=true npm run build && electron-builder",
     "dist": "ELECTRON_BUILD=true npm run build && electron-builder --publish=never"
   },
@@ -22,6 +22,7 @@
     "ai": "^4.3.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron": "^37.2.5",
     "lightningcss": "^1.29.0",
     "lucide-react": "^0.535.0",
     "monaco-editor": "^0.52.2",
@@ -38,7 +39,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "concurrently": "^8.2.2",
-    "electron": "^32.0.0",
     "electron-builder": "^24.13.3",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
@@ -69,11 +69,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "electron/assets/icon.icns"
