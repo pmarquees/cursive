@@ -13,14 +13,148 @@ interface SidebarProps {
   onConnectLocalFolder?: () => void;
   workspaceName?: string;
   isLocalWorkspace?: boolean;
+  onLoadDirectory?: (path: string) => Promise<FileItem[]>;
 }
 
-export function Sidebar({ files, activeFile, onFileSelect, onCreateFile, onDeleteFile, onConnectLocalFolder, workspaceName, isLocalWorkspace }: SidebarProps) {
+export function Sidebar({ files, activeFile, onFileSelect, onCreateFile, onDeleteFile, onConnectLocalFolder, workspaceName, isLocalWorkspace, onLoadDirectory }: SidebarProps) {
   const [isFilesExpanded, setIsFilesExpanded] = useState(true);
   const [isChatsExpanded, setIsChatsExpanded] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [createType, setCreateType] = useState<'file' | 'directory'>('file');
   const [newFileName, setNewFileName] = useState('');
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [folderContents, setFolderContents] = useState<Map<string, FileItem[]>>(new Map());
+  const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
+
+  // Toggle folder expansion and load contents if needed
+  const toggleFolder = async (folderPath: string) => {
+    const isExpanded = expandedFolders.has(folderPath);
+    
+    if (isExpanded) {
+      // Collapse folder
+      setExpandedFolders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(folderPath);
+        return newSet;
+      });
+    } else {
+      // Expand folder
+      setExpandedFolders(prev => {
+        const newSet = new Set(prev);
+        newSet.add(folderPath);
+        return newSet;
+      });
+      
+      // Load folder contents if not already loaded and onLoadDirectory is available
+      if (!folderContents.has(folderPath) && onLoadDirectory) {
+        setLoadingFolders(prev => new Set(prev).add(folderPath));
+        try {
+          const contents = await onLoadDirectory(folderPath);
+          setFolderContents(prev => new Map(prev).set(folderPath, contents));
+        } catch (error) {
+          console.error('Failed to load directory contents:', error);
+        } finally {
+          setLoadingFolders(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(folderPath);
+            return newSet;
+          });
+        }
+      }
+    }
+  };
+
+  // Build hierarchical structure including dynamically loaded folder contents
+  const buildFileTree = (files: FileItem[]): (FileItem & { children?: FileItem[] })[] => {
+    const tree: (FileItem & { children?: FileItem[] })[] = [];
+    
+    // For root level files, add them directly
+    files.forEach(file => {
+      const item: FileItem & { children?: FileItem[] } = {
+        ...file,
+        children: file.type === 'directory' ? (folderContents.get(file.path) || []) : undefined
+      };
+      tree.push(item);
+    });
+
+    return tree;
+  };
+
+  // Recursive component to render file tree
+  const FileTreeItem = ({ item, depth = 0 }: { item: FileItem & { children?: FileItem[] }, depth?: number }) => {
+    const isExpanded = expandedFolders.has(item.path);
+    const hasChildren = item.children && item.children.length > 0;
+    const isLoading = loadingFolders.has(item.path);
+    const canExpand = item.type === 'directory' && (hasChildren || !folderContents.has(item.path));
+
+    return (
+      <div key={item.path}>
+        <div
+          className={`flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer group ${
+            activeFile === item.name ? 'bg-muted' : ''
+          }`}
+          style={{ paddingLeft: `${8 + depth * 16}px` }}
+          onClick={() => {
+            if (item.type === 'directory') {
+              toggleFolder(item.path);
+            } else {
+              onFileSelect(item.name);
+            }
+          }}
+        >
+          {item.type === 'directory' ? (
+            <>
+              {isLoading ? (
+                <div className="w-3 mr-1 flex items-center justify-center">
+                  <div className="w-2 h-2 border border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : canExpand ? (
+                isExpanded ? (
+                  <ChevronDown size={12} className="mr-1 text-muted-foreground flex-shrink-0" />
+                ) : (
+                  <ChevronRight size={12} className="mr-1 text-muted-foreground flex-shrink-0" />
+                )
+              ) : (
+                <div className="w-3 mr-1" />
+              )}
+              <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
+            </>
+          ) : (
+            <>
+              <div className="w-3 mr-1" />
+              <File size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
+            </>
+          )}
+          <span className={`truncate flex-1 ${activeFile === item.name ? 'text-foreground' : ''}`}>
+            {item.name}
+          </span>
+          <button
+            className="opacity-0 group-hover:opacity-100 size-4 flex items-center justify-center text-muted-foreground hover:text-red-500"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteFile(item.name);
+            }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+        
+        {item.type === 'directory' && isExpanded && hasChildren && (
+          <div>
+            {item.children!.map(child => (
+              <FileTreeItem key={child.path || `${item.path}/${child.name}`} item={{
+                ...child,
+                path: child.path || `${item.path}/${child.name}`,
+                children: child.type === 'directory' ? (folderContents.get(child.path || `${item.path}/${child.name}`) || []) : undefined
+              }} depth={depth + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const fileTree = buildFileTree(files);
 
   return (
     <div className="flex flex-col h-full">
@@ -133,54 +267,10 @@ export function Sidebar({ files, activeFile, onFileSelect, onCreateFile, onDelet
                     </div>
                   )}
                   
-                  {/* File list */}
-                  {files
-                    .filter(file => file.type === 'directory')
-                    .map((directory) => (
-                      <div
-                        key={directory.name}
-                        className="flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer group"
-                        onClick={() => onFileSelect(directory.name)}
-                      >
-                        <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className="truncate flex-1">{directory.name}</span>
-                        <button
-                          className="opacity-0 group-hover:opacity-100 size-4 flex items-center justify-center text-muted-foreground hover:text-red-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteFile(directory.name);
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  
-                  {files
-                    .filter(file => file.type === 'file')
-                    .map((file) => (
-                      <div 
-                        key={file.name}
-                        className={`flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer group ${
-                          activeFile === file.name ? 'bg-muted' : ''
-                        }`}
-                        onClick={() => onFileSelect(file.name)}
-                      >
-                        <File size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className={`truncate flex-1 ${activeFile === file.name ? 'text-foreground' : ''}`}>
-                          {file.name}
-                        </span>
-                        <button
-                          className="opacity-0 group-hover:opacity-100 size-4 flex items-center justify-center text-muted-foreground hover:text-red-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteFile(file.name);
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
+                  {/* Hierarchical File Tree */}
+                  {fileTree.map(item => (
+                    <FileTreeItem key={item.path} item={item} depth={0} />
+                  ))}
                 </div>
               </div>
             </div>

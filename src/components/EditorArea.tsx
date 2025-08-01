@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, ArrowRight, Settings, MessageSquare, X, File, Maximize2, Minimize2, Eye, Send, Play, Square, Loader2 } from 'lucide-react';
 import { getWorkspaceMode, detectWorkspaceType, WorkspaceType } from '@/lib/fileApi';
@@ -146,6 +146,15 @@ interface DevServerState {
   error: string | null;
 }
 
+interface RunningServer {
+  projectPath: string;
+  projectName: string;
+  pid: number;
+  isAlive: boolean;
+  port?: number;
+  url?: string;
+}
+
 async function startNextJsServer(): Promise<{ success: boolean; url?: string; port?: number; error?: string }> {
   try {
     const response = await fetch('/api/dev-server/start', {
@@ -177,7 +186,7 @@ async function startNextJsServer(): Promise<{ success: boolean; url?: string; po
   }
 }
 
-async function stopNextJsServer(): Promise<{ success: boolean; error?: string }> {
+async function stopNextJsServer(workspacePath?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch('/api/dev-server/stop', {
       method: 'POST',
@@ -185,7 +194,7 @@ async function stopNextJsServer(): Promise<{ success: boolean; error?: string }>
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        workspacePath: null // Use default workspace
+        workspacePath: workspacePath || null // Use specified path or default workspace
       })
     });
     
@@ -200,6 +209,26 @@ async function stopNextJsServer(): Promise<{ success: boolean; error?: string }>
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+async function listRunningServers(): Promise<{ servers: RunningServer[]; total: number; error?: string }> {
+  try {
+    const response = await fetch('/api/dev-server/list');
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch running servers');
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Error listing servers:', error);
+    return {
+      servers: [],
+      total: 0,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
@@ -236,6 +265,9 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
     isStopping: false,
     error: null
   });
+  const [runningServers, setRunningServers] = useState<RunningServer[]>([]);
+  const [showServersList, setShowServersList] = useState(false);
+  const [stoppingServers, setStoppingServers] = useState<Set<string>>(new Set());
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
@@ -364,6 +396,33 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
     }
   }, [currentFileContent, openFiles, activeView, activeFile]);
 
+  // Refresh running servers list
+  const refreshServersList = useCallback(async () => {
+    const result = await listRunningServers();
+    if (result.servers) {
+      setRunningServers(result.servers);
+      
+      // Update current dev server state if it matches one of the running servers
+      const currentServer = result.servers.find(s => s.projectName === 'workspace');
+      if (currentServer && currentServer.isAlive) {
+        setDevServer(prev => ({
+          ...prev,
+          isRunning: true,
+          url: currentServer.url || null,
+          port: currentServer.port || null,
+          error: null
+        }));
+      } else if (devServer.isRunning) {
+        setDevServer(prev => ({
+          ...prev,
+          isRunning: false,
+          url: null,
+          port: null
+        }));
+      }
+    }
+  }, [devServer.isRunning]);
+
   // Detect workspace type on mount and when files change
   useEffect(() => {
     detectWorkspaceType().then(type => {
@@ -371,6 +430,15 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
       setWorkspaceType(type);
     });
   }, [openFiles]);
+
+  // Refresh servers list on mount and periodically
+  useEffect(() => {
+    refreshServersList();
+    
+    const interval = setInterval(refreshServersList, 5000); // Refresh every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [refreshServersList]);
 
   // Server management handlers
   const handleStartServer = async () => {
@@ -387,6 +455,8 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
         isStopping: false,
         error: null
       });
+      // Refresh the servers list
+      await refreshServersList();
     } else {
       setDevServer(prev => ({
         ...prev,
@@ -396,26 +466,46 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
     }
   };
 
-  const handleStopServer = async () => {
-    setDevServer(prev => ({ ...prev, isStopping: true, error: null }));
+  const handleStopServer = async (projectPath?: string) => {
+    if (projectPath) {
+      // Stopping a specific server
+      setStoppingServers(prev => new Set(prev).add(projectPath));
+    } else {
+      // Stopping current dev server
+      setDevServer(prev => ({ ...prev, isStopping: true, error: null }));
+    }
     
-    const result = await stopNextJsServer();
+    const result = await stopNextJsServer(projectPath);
     
     if (result.success) {
-      setDevServer({
-        isRunning: false,
-        url: null,
-        port: null,
-        isStarting: false,
-        isStopping: false,
-        error: null
-      });
+      if (!projectPath) {
+        setDevServer({
+          isRunning: false,
+          url: null,
+          port: null,
+          isStarting: false,
+          isStopping: false,
+          error: null
+        });
+      }
+      // Refresh the servers list
+      await refreshServersList();
     } else {
-      setDevServer(prev => ({
-        ...prev,
-        isStopping: false,
-        error: result.error || 'Failed to stop server'
-      }));
+      if (!projectPath) {
+        setDevServer(prev => ({
+          ...prev,
+          isStopping: false,
+          error: result.error || 'Failed to stop server'
+        }));
+      }
+    }
+    
+    if (projectPath) {
+      setStoppingServers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(projectPath);
+        return newSet;
+      });
     }
   };
 
@@ -578,7 +668,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
         )}
         
         {activeView === 'preview' && (
-          <div className="w-full h-full bg-white relative">
+          <div className="w-full h-full bg-black relative">
             {/* Next.js Preview */}
             {workspaceType === 'nextjs' ? (
               <>
@@ -599,7 +689,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                     
                     {/* Stop Server Button */}
                     <button
-                      onClick={handleStopServer}
+                      onClick={() => handleStopServer()}
                       disabled={devServer.isStopping}
                       className="absolute top-2 right-12 p-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed"
                       title="Stop Development Server"
@@ -619,6 +709,59 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                         Start the development server to preview your Next.js application with full routing and interactivity.
                       </p>
                     </div>
+
+                    {/* Running Servers List */}
+                    {runningServers.length > 0 && (
+                      <div className="mb-6 w-full max-w-md">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-medium text-gray-700">Running Servers ({runningServers.length})</h4>
+                          <button
+                            onClick={() => setShowServersList(!showServersList)}
+                            className="text-blue-600 hover:text-blue-700 text-xs underline"
+                          >
+                            {showServersList ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                        
+                        {showServersList && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2 text-left">
+                            {runningServers.map((server) => (
+                              <div key={server.projectPath} className="flex items-center justify-between bg-white p-2 rounded border">
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm text-gray-900">{server.projectName}</div>
+                                  <div className="text-xs text-gray-600">
+                                    {server.url ? (
+                                      <a 
+                                        href={server.url} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-700 underline"
+                                      >
+                                        {server.url}
+                                      </a>
+                                    ) : (
+                                      `PID: ${server.pid}`
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleStopServer(server.projectPath)}
+                                  disabled={stoppingServers.has(server.projectPath)}
+                                  className="ml-2 p-1 bg-red-100 hover:bg-red-200 disabled:bg-red-50 text-red-600 rounded transition-colors"
+                                  title="Stop Server"
+                                >
+                                  {stoppingServers.has(server.projectPath) ? (
+                                    <Loader2 size={12} className="animate-spin" />
+                                  ) : (
+                                    <X size={12} />
+                                  )}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     
                     {devServer.error && (
                       <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm max-w-md">
@@ -734,7 +877,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                 </div>
               )}
             </div>
-            <div className="w-1/2 h-full border-l border-border bg-white relative">
+            <div className="w-1/2 h-full border-l border-border bg-black relative">
               {/* Next.js Preview in Split View */}
               {workspaceType === 'nextjs' ? (
                 <>
@@ -755,7 +898,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                       
                       {/* Stop Server Button */}
                       <button
-                        onClick={handleStopServer}
+                        onClick={() => handleStopServer()}
                         disabled={devServer.isStopping}
                         className="absolute top-2 right-8 p-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded shadow-lg transition-all duration-200 hover:scale-105 disabled:cursor-not-allowed"
                         title="Stop Development Server"

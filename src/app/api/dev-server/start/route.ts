@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn, ChildProcess } from 'child_process';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 
 // Store running processes globally
 declare global {
@@ -33,9 +33,62 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Check if node_modules exists, install dependencies if not
+    const nodeModulesPath = join(projectPath, 'node_modules');
+    if (!existsSync(nodeModulesPath)) {
+      console.log('Dependencies not found, installing...');
+      
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const installProcess = spawn('npm', ['install'], {
+            cwd: projectPath,
+            stdio: ['ignore', 'pipe', 'pipe']
+          });
+
+          let installOutput = '';
+          let installError = '';
+
+          installProcess.stdout?.on('data', (data) => {
+            const output = data.toString();
+            installOutput += output;
+            console.log('npm install stdout:', output);
+          });
+
+          installProcess.stderr?.on('data', (data) => {
+            const output = data.toString();
+            installError += output;
+            console.error('npm install stderr:', output);
+          });
+
+          installProcess.on('close', (code) => {
+            if (code === 0) {
+              console.log('Dependencies installed successfully');
+              resolve();
+            } else {
+              console.error('npm install failed with code:', code);
+              console.error('Install output:', installOutput);
+              console.error('Install error:', installError);
+              reject(new Error(`npm install failed with code ${code}: ${installError || installOutput}`));
+            }
+          });
+
+          installProcess.on('error', (error) => {
+            console.error('npm install process error:', error);
+            reject(error);
+          });
+        });
+      } catch (error) {
+        return NextResponse.json(
+          { error: `Failed to install dependencies: ${error instanceof Error ? error.message : 'Unknown error'}` },
+          { status: 500 }
+        );
+      }
+    }
     
     try {
-      const packageJson = require(packageJsonPath);
+      const packageJsonContent = readFileSync(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonContent);
       const hasNextJs = packageJson.dependencies?.next || packageJson.devDependencies?.next;
       
       if (!hasNextJs) {
@@ -54,15 +107,16 @@ export async function POST(request: NextRequest) {
     // Check if server is already running for this project
     if (runningProcesses.has(projectPath)) {
       return NextResponse.json(
-        { error: 'Server already running for this project', url: 'http://localhost:3000' },
+        { error: 'Server already running for this project', url: 'http://localhost:9234' },
         { status: 400 }
       );
     }
     
-    // Find available port (start with 3000)
-    let port = 3000;
+    // Find available port (start with 9234 to avoid common dev server conflicts)
+    let port = 9234;
     
     // Start Next.js development server
+    console.log(`Starting Next.js dev server on port ${port} in directory: ${projectPath}`);
     const child = spawn('npm', ['run', 'dev'], {
       cwd: projectPath,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -72,6 +126,13 @@ export async function POST(request: NextRequest) {
         NODE_ENV: 'development'
       }
     });
+
+    if (!child.pid) {
+      return NextResponse.json(
+        { error: 'Failed to spawn development server process' },
+        { status: 500 }
+      );
+    }
     
     // Store the process
     runningProcesses.set(projectPath, child);
@@ -115,7 +176,21 @@ export async function POST(request: NextRequest) {
       
       child.stderr?.on('data', (data) => {
         const output = data.toString();
-        console.log('Next.js stderr:', output);
+        console.error('Next.js stderr:', output);
+        
+        // Check for fatal errors that cause immediate exit
+        if (output.includes('Error:') || output.includes('Cannot find module') || output.includes('MODULE_NOT_FOUND')) {
+          console.error('Fatal error detected in Next.js stderr:', output);
+          if (!serverReady) {
+            clearTimeout(timeout);
+            runningProcesses.delete(projectPath);
+            resolve(NextResponse.json(
+              { error: `Server failed to start: ${output.trim()}` },
+              { status: 500 }
+            ));
+            return;
+          }
+        }
         
         // Handle port in use error
         if (output.includes('EADDRINUSE') || output.includes('port') || output.includes('address already in use')) {
@@ -127,10 +202,10 @@ export async function POST(request: NextRequest) {
           child.kill();
           runningProcesses.delete(projectPath);
           
-          if (port > 3010) { // Don't try too many ports
+          if (port > 9244) { // Don't try too many ports (9234-9244)
             clearTimeout(timeout);
             resolve(NextResponse.json(
-              { error: 'No available ports found (tried 3000-3010)' },
+              { error: 'No available ports found (tried 9234-9244)' },
               { status: 500 }
             ));
             return;
@@ -195,13 +270,14 @@ export async function POST(request: NextRequest) {
         }
       });
       
-      child.on('exit', (code) => {
-        console.log('Next.js process exited with code:', code);
+      child.on('exit', (code, signal) => {
+        console.log(`Next.js process exited with code: ${code}, signal: ${signal}`);
+        console.log(`Server was ready: ${serverReady}`);
         runningProcesses.delete(projectPath);
         if (!serverReady) {
           clearTimeout(timeout);
           resolve(NextResponse.json(
-            { error: `Server exited with code ${code}` },
+            { error: `Server exited with code ${code}${signal ? ` (signal: ${signal})` : ''}. Check server logs for details.` },
             { status: 500 }
           ));
         }

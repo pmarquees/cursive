@@ -207,6 +207,16 @@ Happy coding! 🚀`
     }
   };
 
+  const handleLoadDirectory = async (path: string): Promise<FileItem[]> => {
+    try {
+      const directoryFiles = await listFiles(path);
+      return directoryFiles;
+    } catch (error) {
+      console.error('Failed to load directory:', error);
+      return [];
+    }
+  };
+
   const handleConnectLocalFolder = async () => {
     if (!isFileSystemAccessSupported()) {
       alert('File System Access API is not supported in this browser. Please use a modern browser like Chrome or Edge.');
@@ -261,6 +271,7 @@ Happy coding! 🚀`
               onCreateFile={handleCreateFile}
               onDeleteFile={handleDeleteFile}
               onConnectLocalFolder={handleConnectLocalFolder}
+              onLoadDirectory={handleLoadDirectory}
               workspaceName={workspaceInfo.name}
               isLocalWorkspace={workspaceInfo.mode === 'local'}
             />
