@@ -1,6 +1,6 @@
 # 🤖 AI Code Editor Examples
 
-Your Baby Cursor IDE now has **AI file editing capabilities**! The AI can automatically create, modify, and manage files when you ask it to. Here are some examples:
+Your Cursive IDE now has **AI file editing capabilities**! The AI can automatically create, modify, and manage files when you ask it to. Here are some examples:
 
 ## 🎮 **Example 1: Create a Tic Tac Toe Game**
 

@@ -1,14 +1,15 @@
-# Baby Cursor Next.js
+# Cursive Next.js
 
-A modern, web-based IDE built with Next.js, React, and Monaco Editor. Baby Cursor provides a complete coding environment in your browser with AI chat assistance.
+Cursive is a custom AI-first IDE inspired by Cursor and [Ryo's Baby cursor](https://x.com/ryolu_/status/1908328050154233863). Built with Next.js, React, and Monaco Editor, Cursive provides a complete coding environment in your browser with AI chat assistance.
 
-![Baby Cursor Screenshot](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=Baby+Cursor+IDE)
+![Cursive Screenshot](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=Cursive+IDE)
 
 ## ✨ Features
 
 - 📝 **Monaco Editor** - Full VS Code editor experience in the browser
 - 🗂️ **File Explorer** - Navigate and manage your project files
 - 💬 **AI Chat** - Get coding assistance with integrated AI chat
+- 💭 **UI Inspector** - Turn any code comment into an AI prompt
 - 🎨 **Live Preview** - See HTML changes instantly with split view
 - 🌙 **Dark Theme** - Beautiful dark interface (light theme coming soon)
 - ⚡ **Fast Performance** - Built with Next.js 15 and React 19
@@ -22,7 +23,7 @@ A modern, web-based IDE built with Next.js, React, and Monaco Editor. Baby Curso
 1. **Clone and install dependencies:**
    ```bash
    git clone <your-repo>
-   cd baby-cursor-nextjs
+   cd cursive
    npm install
    ```
 
@@ -43,26 +44,6 @@ npm run build
 npm start
 ```
 
-## 🌐 Deploy to Vercel
-
-### One-Click Deploy
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fbaby-cursor-nextjs)
-
-### Manual Deploy
-
-1. **Install Vercel CLI:**
-   ```bash
-   npm i -g vercel
-   ```
-
-2. **Deploy:**
-   ```bash
-   vercel
-   ```
-
-3. **Follow the prompts and your Baby Cursor IDE will be live!**
-
 ## 🛠️ Tech Stack
 
 - **Framework:** Next.js 15 (App Router)
@@ -76,7 +57,7 @@ npm start
 ## 📁 Project Structure
 
 ```
-baby-cursor-nextjs/
+cursive/
 ├── src/
 │   ├── app/
 │   │   ├── globals.css      # Global styles and theme variables
@@ -119,7 +100,7 @@ baby-cursor-nextjs/
 
 ## 🎨 Theming
 
-Baby Cursor uses a sophisticated dark theme with CSS custom properties:
+Cursive uses a sophisticated dark theme with CSS custom properties:
 
 - **Background colors:** Deep grays and blacks
 - **Accent colors:** Subtle blues and whites
@@ -155,29 +136,3 @@ Update CSS variables in `globals.css`:
   /* Modify colors here */
 }
 ```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Monaco Editor](https://microsoft.github.io/monaco-editor/) - The editor that powers VS Code
-- [Next.js](https://nextjs.org/) - The React framework for production
-- [Tailwind CSS](https://tailwindcss.com/) - A utility-first CSS framework
-- [Lucide](https://lucide.dev/) - Beautiful & consistent icons
-- [Vercel](https://vercel.com/) - Platform for frontend developers
-
----
-
-Built with ❤️ by the Baby Cursor team. 
-
-**Happy coding!** 🚀
