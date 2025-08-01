@@ -6,7 +6,11 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron": "electron .",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "build-electron": "ELECTRON_BUILD=true npm run build && electron-builder",
+    "dist": "ELECTRON_BUILD=true npm run build && electron-builder --publish=never"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
@@ -33,14 +37,50 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^8.2.2",
+    "electron": "^32.0.0",
+    "electron-builder": "^24.13.3",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "wait-on": "^7.2.0"
   },
   "optionalDependencies": {
     "@lightningcss/linux-x64-gnu": "^1.29.0",
     "@lightningcss/linux-x64-musl": "^1.29.0",
     "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0",
     "@tailwindcss/oxide-linux-x64-musl": "^4.0.0"
+  },
+  "main": "electron/main.js",
+  "build": {
+    "appId": "com.cursive.ide",
+    "productName": "Cursive",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "electron/assets/icon.icns"
+    },
+    "dmg": {
+      "title": "${productName}",
+      "icon": "electron/assets/icon.icns"
+    }
   }
 }

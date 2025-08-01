@@ -44,6 +44,36 @@ npm run build
 npm start
 ```
 
+### Desktop App (Electron)
+
+Run Cursive as a native macOS desktop application:
+
+#### Development
+```bash
+# Install dependencies
+npm install
+
+# Run in development mode (starts Next.js dev server + Electron)
+npm run electron-dev
+```
+
+#### Production Build
+```bash
+# Build and package for macOS
+npm run dist
+
+# The built app will be in the `dist/` folder
+# - Cursive-1.0.0.dmg (installer)
+# - Cursive-1.0.0-mac.zip (standalone app)
+```
+
+#### Running the Desktop App
+- The Electron app provides a native macOS experience with:
+  - Native window controls and title bar
+  - Application menu with keyboard shortcuts
+  - Proper macOS integration
+  - All web app features preserved
+
 ## 🛠️ Tech Stack
 
 - **Framework:** Next.js 15 (App Router)
@@ -52,6 +82,7 @@ npm start
 - **Editor:** Monaco Editor (@monaco-editor/react)
 - **Icons:** Lucide React
 - **UI Components:** Radix UI primitives
+- **Desktop:** Electron (for native macOS app)
 - **Deployment:** Vercel (recommended)
 
 ## 📁 Project Structure
@@ -68,9 +99,13 @@ cursive/
 │       ├── EditorArea.tsx   # Monaco editor with tabs
 │       ├── ChatPanel.tsx    # AI chat interface
 │       └── StatusBar.tsx    # Bottom status bar
-├── public/                  # Static assets
-├── vercel.json             # Vercel deployment config
-└── package.json            # Dependencies and scripts
+├── electron/
+│   ├── main.js             # Electron main process
+│   ├── preload.js          # Preload script for security
+│   └── assets/             # App icons and assets
+├── public/                 # Static assets
+├── vercel.json            # Vercel deployment config
+└── package.json           # Dependencies and scripts
 ```
 
 ## 🎯 Components Overview

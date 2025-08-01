@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
+const isElectron = process.env.ELECTRON_BUILD === 'true';
+
 const nextConfig: NextConfig = {
+  output: isElectron ? 'export' : undefined,
+  trailingSlash: isElectron,
+  images: {
+    unoptimized: isElectron,
+  },
   async headers() {
     return [
       {
