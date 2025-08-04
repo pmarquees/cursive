@@ -2,10 +2,49 @@ const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const isDev = process.env.NODE_ENV === 'development';
 
+// For production builds, we need to start Next.js server
+let nextServer = null;
+
 // Keep a global reference of the window object
 let mainWindow;
 
-function createWindow() {
+// Start Next.js server for production
+async function startNextServer() {
+  if (isDev) return 'http://localhost:3000';
+  
+  try {
+    const next = require('next');
+    const nextApp = next({ 
+      dev: false, 
+      dir: path.join(__dirname, '..'),
+      conf: {
+        distDir: '.next'
+      }
+    });
+    
+    await nextApp.prepare();
+    
+    const handle = nextApp.getRequestHandler();
+    const { createServer } = require('http');
+    
+    nextServer = createServer((req, res) => {
+      handle(req, res);
+    });
+    
+    return new Promise((resolve) => {
+      nextServer.listen(3000, (err) => {
+        if (err) throw err;
+        console.log('Next.js server started on http://localhost:3000');
+        resolve('http://localhost:3000');
+      });
+    });
+  } catch (error) {
+    console.error('Failed to start Next.js server:', error);
+    return null;
+  }
+}
+
+async function createWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -29,9 +68,12 @@ function createWindow() {
   });
 
   // Load the app
-  const startUrl = isDev 
-    ? 'http://localhost:3000' 
-    : `file://${path.join(__dirname, '../out/index.html')}`;
+  const startUrl = await startNextServer();
+  
+  if (!startUrl) {
+    console.error('Failed to start Next.js server');
+    return;
+  }
   
   mainWindow.loadURL(startUrl);
 
@@ -182,15 +224,15 @@ function createMenu() {
 }
 
 // App event handlers
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  await createWindow();
   createMenu();
 
-  app.on('activate', () => {
+  app.on('activate', async () => {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      await createWindow();
     }
   });
 });
@@ -199,6 +241,13 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+// Clean up Next.js server on quit
+app.on('before-quit', () => {
+  if (nextServer) {
+    nextServer.close();
   }
 });
 

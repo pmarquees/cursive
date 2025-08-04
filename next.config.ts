@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const isElectron = process.env.ELECTRON_BUILD === 'true';
 
 const nextConfig: NextConfig = {
-  output: isElectron ? 'export' : undefined,
+  // Remove static export for Electron - we want to run as server for API routes
   trailingSlash: isElectron,
   images: {
     unoptimized: isElectron,

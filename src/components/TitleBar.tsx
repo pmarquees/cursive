@@ -5,6 +5,13 @@ interface TitleBarProps {
   workspaceName?: string;
 }
 
+// Extend CSSProperties to include webkit app region
+declare module 'react' {
+  interface CSSProperties {
+    WebkitAppRegion?: 'drag' | 'no-drag';
+  }
+}
+
 export function TitleBar({ activeFile, workspaceName }: TitleBarProps) {
   const displayPath = workspaceName && activeFile 
     ? `${workspaceName}/${activeFile}`
@@ -17,14 +24,14 @@ export function TitleBar({ activeFile, workspaceName }: TitleBarProps) {
       className="flex items-center justify-center h-10 px-4 text-sm select-none relative"
       style={{ 
         backgroundColor: '#171717',
-        WebkitAppRegion: 'drag' as any,
+        WebkitAppRegion: 'drag',
         color: '#ffffff'
       }}
     >
       {/* Traffic light area - non-draggable */}
       <div 
         className="absolute left-0 top-0 h-full w-20"
-        style={{ WebkitAppRegion: 'no-drag' as any }}
+        style={{ WebkitAppRegion: 'no-drag' }}
       />
       
       {/* Center content */}
