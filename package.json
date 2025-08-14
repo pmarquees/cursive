@@ -1,0 +1,44 @@
+{
+  "name": "baby-cursor-nextjs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/openai-compatible": "^1.0.7",
+    "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/provider": "^2.0.0",
+    "@ai-sdk/provider-utils": "^3.0.0",
+    "@ai-sdk/react": "^2.0.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tooltip": "^1.2.7",
+    "@vercel/blob": "^1.1.1",
+    "ai": "^5.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.535.0",
+    "monaco-editor": "^0.52.2",
+    "next": "15.4.5",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.4.5",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
