@@ -57,6 +57,24 @@ Tip: Try `workspace/calculator.html` as a starting example, or create a new file
 - Storage/Blob setup (optional): see `VERCEL_BLOB_SETUP.md`
 - Additional setup notes: see `SETUP.md`
 
+## LM Studio (Local models)
+
+Use a local model via LM Studio’s OpenAI‑compatible server.
+
+1. Install [LM Studio](https://lmstudio.ai/).
+2. In LM Studio:
+   - Download a chat‑capable model
+   - Start the OpenAI‑compatible Local Server (default URL is `http://localhost:1234/v1`)
+3. Copy the model’s ID shown in LM Studio’s server panel.
+4. In the app’s chat model picker, choose `Local (LM Studio)…`, then:
+   - Paste the Server URL (e.g., `http://localhost:1234/v1`)
+   - Paste the Model ID you copied
+   - Save
+
+Notes:
+- No API key is required for LM Studio.
+- Keep LM Studio running while using the local model.
+
 ## Notes
 
 Cursive focuses on shortening the gap from idea to working UI by combining code, visual manipulation, and AI guidance in a single workflow.
