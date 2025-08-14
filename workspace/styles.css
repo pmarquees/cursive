@@ -1,0 +1,9 @@
+/* Style for the display div */
+#display.display.inspection-hover {
+    background-color: orange;
+}
+
+/* Style for the C button */
+button.c-button {
+    background-color: orange;
+}
