@@ -4,12 +4,23 @@ import path from 'path';
 
 const WORKSPACE_DIR = path.join(process.cwd(), 'workspace');
 
+// Check if we're in production environment (Vercel) where filesystem is read-only
+const isProductionEnvironment = () => {
+  return process.env.VERCEL || process.env.NODE_ENV === 'production';
+};
+
 // PUT - Save/update file content
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const resolvedParams = await params;
+  
+  // In production, return an error so client falls back to localStorage
+  if (isProductionEnvironment()) {
+    return NextResponse.json({ error: 'Filesystem not available in production' }, { status: 500 });
+  }
+  
   try {
     const filePath = resolvedParams.path.join('/');
     const fullPath = path.join(WORKSPACE_DIR, filePath);
@@ -38,6 +49,12 @@ export async function DELETE(
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const resolvedParams = await params;
+  
+  // In production, return an error so client falls back to localStorage
+  if (isProductionEnvironment()) {
+    return NextResponse.json({ error: 'Filesystem not available in production' }, { status: 500 });
+  }
+  
   try {
     const filePath = resolvedParams.path.join('/');
     const fullPath = path.join(WORKSPACE_DIR, filePath);
@@ -68,6 +85,12 @@ export async function GET(
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const resolvedParams = await params;
+  
+  // In production, return an error so client falls back to localStorage
+  if (isProductionEnvironment()) {
+    return NextResponse.json({ error: 'Filesystem not available in production' }, { status: 500 });
+  }
+  
   try {
     const filePath = resolvedParams.path.join('/');
     const fullPath = path.join(WORKSPACE_DIR, filePath);

@@ -1,18 +1,11 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "installCommand": "npm ci && npm install --no-save --platform=linuxmusl --arch=x64 lightningcss @tailwindcss/oxide",
   "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
   "functions": {
-    "src/app/**/*.{js,ts,tsx}": {
-      "maxDuration": 30
-    }
-  },
-  "build": {
-    "env": {
-      "NODE_OPTIONS": "--max-old-space-size=4096",
-      "NEXT_TELEMETRY_DISABLED": "1"
-    }
+    "src/app/api/chat/route.ts": { "maxDuration": 60 },
+    "src/app/**/*.{js,ts,tsx}": { "maxDuration": 30 }
   },
   "rewrites": [
     {

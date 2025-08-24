@@ -4,6 +4,11 @@ import path from 'path';
 
 const WORKSPACE_DIR = path.join(process.cwd(), 'workspace');
 
+// Check if we're in production environment (Vercel) where filesystem is read-only
+const isProductionEnvironment = () => {
+  return process.env.VERCEL || process.env.NODE_ENV === 'production';
+};
+
 // Ensure workspace directory exists
 async function ensureWorkspaceDir() {
   try {
@@ -15,6 +20,11 @@ async function ensureWorkspaceDir() {
 
 // GET - List files and directories
 export async function GET(request: NextRequest) {
+  // In production, return an error so client falls back to localStorage
+  if (isProductionEnvironment()) {
+    return NextResponse.json({ error: 'Filesystem not available in production' }, { status: 500 });
+  }
+  
   try {
     await ensureWorkspaceDir();
     
@@ -36,14 +46,14 @@ export async function GET(request: NextRequest) {
         if (item.isDirectory()) {
           return {
             name: item.name,
-            type: 'directory',
+            type: 'directory' as const,
             path: relativePath,
           };
         } else {
           const content = await fs.readFile(itemPath, 'utf-8');
           return {
             name: item.name,
-            type: 'file',
+            type: 'file' as const,
             path: relativePath,
             content,
           };
@@ -60,6 +70,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Create file or directory
 export async function POST(request: NextRequest) {
+  // In production, return an error so client falls back to localStorage
+  if (isProductionEnvironment()) {
+    return NextResponse.json({ error: 'Filesystem not available in production' }, { status: 500 });
+  }
+  
   try {
     await ensureWorkspaceDir();
     

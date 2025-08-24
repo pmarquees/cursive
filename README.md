@@ -1,138 +1,62 @@
-# Cursive Next.js
+# Cursive – AI‑assisted in‑browser editor
 
-Cursive is a custom AI-first IDE inspired by Cursor and [Ryo's Baby cursor](https://x.com/ryolu_/status/1908328050154233863). Built with Next.js, React, and Monaco Editor, Cursive provides a complete coding environment in your browser with AI chat assistance.
+Build, preview, and iterate on web projects with an integrated code editor, visual design tools, and AI assistance—all in the browser.
 
-![Cursive Screenshot](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=Cursive+IDE)
+## Key features
 
-## ✨ Features
+-  Editor: Monaco-based code editor with syntax highlighting
+-  Files: Create, rename, and delete files and folders
+-  AI chat with file context: Reference files with `@file` mentions to guide the assistant
+-  Live preview: See code changes reflected in real time
+-  Code/Design split view: Edit code while previewing the rendered UI side-by-side
+-  Visual inspector panels: Select elements in the preview and adjust styles/props visually
+-  Contextual prompts: Press `C`, then click an element to start an AI prompt scoped to that component
+-  Responsive preview: Inspect mobile, tablet, and desktop layouts simultaneously
+-  Mobile-friendly UI: Dedicated mobile controls for on-the-go editing and previewing
 
-- 📝 **Monaco Editor** - Full VS Code editor experience in the browser
-- 🗂️ **File Explorer** - Navigate and manage your project files
-- 💬 **AI Chat** - Get coding assistance with integrated AI chat
-- 💭 **UI Inspector** - Turn any code comment into an AI prompt
-- 🎨 **Live Preview** - See HTML changes instantly with split view
-- 🌙 **Dark Theme** - Beautiful dark interface (light theme coming soon)
-- ⚡ **Fast Performance** - Built with Next.js 15 and React 19
-- 📱 **Responsive** - Works on desktop, tablet, and mobile
-- 🚀 **Easy Deployment** - One-click deploy to Vercel
+## Getting started
 
-## 🚀 Quick Start
+Requirements:
 
-### Development
+- Node.js 18+ and npm (or pnpm/yarn)
 
-1. **Clone and install dependencies:**
-   ```bash
-   git clone <your-repo>
-   cd cursive
-   npm install
-   ```
-
-2. **Start development server:**
-   ```bash
-   npm run dev
-   ```
-
-3. **Open in browser:**
-   ```
-   http://localhost:3000
-   ```
-
-### Production Build
+Install and run:
 
 ```bash
-npm run build
-npm start
+npm install
+npm run dev
 ```
 
-## 🛠️ Tech Stack
+Then open `http://localhost:3000`.
 
-- **Framework:** Next.js 15 (App Router)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS 4
-- **Editor:** Monaco Editor (@monaco-editor/react)
-- **Icons:** Lucide React
-- **UI Components:** Radix UI primitives
-- **Deployment:** Vercel (recommended)
+Tip: Try `workspace/calculator.html` as a starting example, or create a new file in the file sidebar.
 
-## 📁 Project Structure
+## How to use
 
-```
-cursive/
-├── src/
-│   ├── app/
-│   │   ├── globals.css      # Global styles and theme variables
-│   │   ├── layout.tsx       # Root layout with dark theme
-│   │   └── page.tsx         # Main IDE interface
-│   └── components/
-│       ├── Sidebar.tsx      # File explorer and navigation
-│       ├── EditorArea.tsx   # Monaco editor with tabs
-│       ├── ChatPanel.tsx    # AI chat interface
-│       └── StatusBar.tsx    # Bottom status bar
-├── public/                  # Static assets
-├── vercel.json             # Vercel deployment config
-└── package.json            # Dependencies and scripts
-```
+- Create/open files from the sidebar and edit them in the Monaco editor
+- Preview updates live in the preview panel; switch to split Code/Design view as needed
+- Use the visual inspector to tweak selected elements without writing CSS
+- For targeted help, press `C` and click an element to open a context-aware AI prompt
+- Use the responsive preview to review mobile, tablet, and desktop breakpoints at once
 
-## 🎯 Components Overview
+## Keyboard shortcuts
 
-### Sidebar
-- File explorer with expandable folders
-- Project navigation
-- Chat history
-- Quick actions
+- `C` + click: Start a contextual AI prompt for a selected element
+- Standard editor shortcuts apply (e.g., Cmd/Ctrl+S to save)
 
-### EditorArea
-- Monaco Editor integration
-- Multi-tab support
-- Code/Preview/Split view modes
-- Syntax highlighting for multiple languages
+## Project structure
 
-### ChatPanel
-- AI chat interface
-- Context-aware coding assistance
-- Manual/Auto modes
-- Model selection
+- `src/app` – Next.js app and API routes (e.g., `api/files`, `api/chat`, optional blob utilities)
+- `src/components` – Editor, preview, design panels, and UI building blocks
+- `workspace` – Example and user-created files served in the preview (e.g., `calculator.html`)
+- `public` – Static assets
 
-### StatusBar
-- Theme toggle
-- File information
-- Help and reset options
+## Configuration
 
-## 🎨 Theming
+- API keys and providers: see `SETUP_API_KEYS.md`
+- Storage/Blob setup (optional): see `VERCEL_BLOB_SETUP.md`
+- Additional setup notes: see `SETUP.md`
 
-Cursive uses a sophisticated dark theme with CSS custom properties:
+## Notes
 
-- **Background colors:** Deep grays and blacks
-- **Accent colors:** Subtle blues and whites
-- **Syntax highlighting:** VS Code dark theme
-- **UI elements:** Consistent spacing and typography
-
-## 🔧 Customization
-
-### Adding New File Types
-
-Edit `EditorArea.tsx` to add support for new languages:
-
-```typescript
-const getLanguage = (fileName: string) => {
-  const extension = fileName.split('.').pop()?.toLowerCase();
-  switch (extension) {
-    case 'py': return 'python';
-    case 'rs': return 'rust';
-    // Add more languages here
-    default: return 'plaintext';
-  }
-};
-```
-
-### Modifying the Theme
-
-Update CSS variables in `globals.css`:
-
-```css
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  /* Modify colors here */
-}
-```
+Cursive focuses on shortening the gap from idea to working UI by combining code, visual manipulation, and AI guidance in a single workflow.

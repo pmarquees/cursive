@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sci cal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e1e1e, #2d2d2d);
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            padding: 20px;
+            color: #fff;
+         borderRadius: 0px;}
+
+        .page-title {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: blue; /* Changed to blue */
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+            animation: fadeIn 1s ease-out;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #ff52b6;
+            margin-bottom: 20px;
+            text-align: center;
+            animation: fadeIn 1.2s ease-out;
+            opacity: 0.8;
+        }
+
+        .calculator {
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3),
+                        0 0 40px rgba(0, 255, 255, 0.2);
+            width: 600px; /* Changed width to 600px */
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: floatIn 0.8s ease-out;
+        }
+
+        .display {
+            padding: 20px;
+            font-size: 2em;
+            text-align: right;
+            background: rgba(0, 0, 0, 0.3);
+            color: orange; /* Changed to orange */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            word-break: break-all;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1px;
+        }
+
+        button {
+            padding: 20px;
+            font-size: 1.2em;
+            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes floatIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .display.animate {
+            animation: pulse 0.3s ease;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    
+      h1.page-title {
+        color: #fff;
+       fontWeight: 600;}
+      #display {
+        width: 1200px;
+      }</style>
+</head>
+<body>
+    <h1 class="page-title">SciCal</h1>
+    <div class="subtitle">Your Scientific Pal</div>
+    
+    <div class="calculator">
+        <div class="display" id="display">0</div>
+        <div class="buttons">
+            <button onclick="appendNumber('/')">/</button>
+            <button onclick="appendNumber('*')">×</button>
+            <button onclick="appendNumber('-')">−</button>
+            <button onclick="appendNumber('+')">+</button>
+            <button onclick="clearDisplay()">C</button>
+            <button onclick="appendNumber('7')">7</button>
+            <button onclick="appendNumber('8')">8</button>
+            <button onclick="appendNumber('9')">9</button>
+            <button onclick="appendNumber('4')">4</button>
+            <button onclick="appendNumber('5')">5</button>
+            <button onclick="appendNumber('6')">6</button>
+            <button onclick="appendNumber('1')">1</button>
+            <button onclick="appendNumber('2')">2</button>
+            <button onclick="appendNumber('3')">3</button>
+            <button onclick="appendNumber('0')">0</button>
+            <button onclick="appendNumber('.')">.</button>
+            <button onclick="calculate()">=</button>
+            <button onclick="appendOperation('Math.sin(')">sin</button>
+            <button onclick="appendOperation('Math.cos(')">cos</button>
+            <button onclick="appendOperation('Math.tan(')">tan</button>
+            <button onclick="appendOperation('Math.log10(')">log</button>
+            <button onclick="appendOperation('Math.pow(')">pow</button>
+        </div>
+    </div>
+    <script>
+        let currentInput = '';
+        const display = document.getElementById('display');
+
+        function appendNumber(number) {
+            currentInput += number;
+            display.innerText = currentInput;
+            animateDisplay();
+        }
+
+        function appendOperation(operation) {
+            currentInput += operation;
+            display.innerText = currentInput;
+            animateDisplay();
+        }
+
+        function clearDisplay() {
+            currentInput = '';
+            display.innerText = '0';
+            animateDisplay();
+        }
+
+        function calculate() {
+            try {
+                currentInput = eval(currentInput);
+                display.innerText = currentInput;
+                animateDisplay();
+            } catch (e) {
+                display.innerText = 'Error';
+                animateDisplay();
+            }
+        }
+
+        function animateDisplay() {
+            display.classList.add('animate');
+            setTimeout(() => {
+                display.classList.remove('animate');
+            }, 300);
+        }
+
+        // Add hover effect to calculator
+        const calculator = document.querySelector('.calculator');
+        document.addEventListener('mousemove', (e) => {
+            const { left, top, width, height } = calculator.getBoundingClientRect();
+            const x = (e.clientX - left) / width - 0.5;
+            const y = (e.clientY - top) / height - 0.5;
+            
+            calculator.style.transform = `
+                rotateY(${x * 5}deg)
+                rotateX(${-y * 5}deg)
+            `;
+        });
+
+        // Reset transform when mouse leaves
+        document.addEventListener('mouseleave', () => {
+            calculator.style.transform = 'rotateY(0) rotateX(0)';
+        });
+    </script>
+</body>
+</html>

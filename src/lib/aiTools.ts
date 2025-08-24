@@ -4,25 +4,18 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
+import { put, del, list } from '@vercel/blob';
 
 const WORKSPACE_DIR = path.join(process.cwd(), 'workspace');
 
-// Server-side workspace mode management
-let currentWorkspaceMode: 'local' | 'remote' = 'remote';
+// Check if we're in production environment (Vercel) where we should use Blob storage
+const isProductionEnvironment = () => {
+  return process.env.VERCEL || process.env.NODE_ENV === 'production';
+};
 
-export function setWorkspaceMode(mode: 'local' | 'remote') {
-  currentWorkspaceMode = mode;
-  console.log('AI Tools: Setting workspace mode to:', mode);
-}
-
-// Security check for file paths
-function isValidPath(filePath: string): boolean {
-  const fullPath = path.join(WORKSPACE_DIR, filePath);
-  return fullPath.startsWith(WORKSPACE_DIR) && !filePath.includes('..');
-}
-
-// Ensure workspace directory exists
+// Ensure workspace directory exists (only for development)
 async function ensureWorkspaceDir() {
+  if (isProductionEnvironment()) return;
   try {
     await fs.access(WORKSPACE_DIR);
   } catch {
@@ -30,52 +23,179 @@ async function ensureWorkspaceDir() {
   }
 }
 
+// Security check for file paths
+function isValidPath(filePath: string): boolean {
+  if (isProductionEnvironment()) {
+    // In production, just check for path traversal (allow empty string for root directory)
+    return !filePath.includes('..');
+  }
+  const fullPath = path.join(WORKSPACE_DIR, filePath);
+  return fullPath.startsWith(WORKSPACE_DIR) && !filePath.includes('..');
+}
+
+// Create file using appropriate storage method
+async function createFileInStorage(fileName: string, content: string) {
+  if (isProductionEnvironment()) {
+    // Use Vercel Blob in production
+    const { url } = await put(`files/${fileName}`, content, {
+      access: 'public',
+      contentType: 'text/plain',
+      allowOverwrite: true, // Allow overwriting existing files
+    });
+    return { url, path: fileName };
+  } else {
+    // Use filesystem in development
+    await ensureWorkspaceDir();
+    const fullPath = path.join(WORKSPACE_DIR, fileName);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    await fs.writeFile(fullPath, content, 'utf-8');
+    return { path: fileName };
+  }
+}
+
+// Update file using appropriate storage method
+async function updateFileInStorage(fileName: string, content: string) {
+  if (isProductionEnvironment()) {
+    // Use Vercel Blob in production
+    const { url } = await put(`files/${fileName}`, content, {
+      access: 'public',
+      contentType: 'text/plain',
+      allowOverwrite: true, // Allow overwriting existing files
+    });
+    return { url, path: fileName };
+  } else {
+    // Use filesystem in development
+    await ensureWorkspaceDir();
+    const fullPath = path.join(WORKSPACE_DIR, fileName);
+    await fs.writeFile(fullPath, content, 'utf-8');
+    return { path: fileName };
+  }
+}
+
+// Read file using appropriate storage method
+async function readFileFromStorage(fileName: string): Promise<string> {
+  if (isProductionEnvironment()) {
+    // Use Vercel Blob in production
+    const { blobs } = await list({
+      prefix: `files/${fileName}`,
+    });
+    
+    const blob = blobs.find(b => b.pathname === `files/${fileName}`);
+    if (!blob) {
+      throw new Error('File not found');
+    }
+    
+    const response = await fetch(blob.url);
+    if (!response.ok) {
+      throw new Error('Failed to fetch file content');
+    }
+    
+    return await response.text();
+  } else {
+    // Use filesystem in development
+    const fullPath = path.join(WORKSPACE_DIR, fileName);
+    return await fs.readFile(fullPath, 'utf-8');
+  }
+}
+
+// List files using appropriate storage method
+async function listFilesInStorage(directory: string = '') {
+  if (isProductionEnvironment()) {
+    // Use Vercel Blob in production
+    const prefix = directory ? `files/${directory}/` : 'files/';
+    const { blobs } = await list({ prefix });
+    
+    const files = blobs.map(blob => {
+      const fullPath = blob.pathname.replace('files/', '');
+      return fullPath.split('/').pop() || '';
+    }).filter(name => name.length > 0);
+    
+    return { files, directories: [] }; // Blob storage doesn't have explicit directories
+  } else {
+    // Use filesystem in development
+    await ensureWorkspaceDir();
+    const fullPath = path.join(WORKSPACE_DIR, directory);
+    const items = await fs.readdir(fullPath, { withFileTypes: true });
+    
+    const files = items
+      .filter(item => item.isFile())
+      .map(item => item.name);
+      
+    const directories = items
+      .filter(item => item.isDirectory())
+      .map(item => item.name);
+    
+    return { files, directories };
+  }
+}
+
+// Delete file using appropriate storage method
+async function deleteFileFromStorage(fileName: string) {
+  if (isProductionEnvironment()) {
+    // Use Vercel Blob in production
+    const { blobs } = await list({
+      prefix: `files/${fileName}`,
+    });
+    
+    const blob = blobs.find(b => b.pathname === `files/${fileName}`);
+    if (!blob) {
+      throw new Error('File not found');
+    }
+    
+    await del(blob.url);
+  } else {
+    // Use filesystem in development
+    const fullPath = path.join(WORKSPACE_DIR, fileName);
+    await fs.unlink(fullPath);
+  }
+}
+
 export const aiTools = {
   // Tool for creating new files
   createFile: tool({
     description: 'Create a new file with specified content',
-    parameters: z.object({
+    inputSchema: z.object({
       fileName: z.string().describe('Name of the file to create (e.g., "index.html", "script.js")'),
       content: z.string().describe('Content to write to the file'),
       reason: z.string().describe('Brief explanation of why this file is being created'),
     }),
     execute: async ({ fileName, content, reason }) => {
+      console.log('📝 [Tool] createFile called:', {
+        fileName,
+        contentLength: content.length,
+        reason,
+        isProduction: isProductionEnvironment(),
+        timestamp: new Date().toISOString()
+      });
+      
       try {
-        console.log('AI Tools createFile: mode =', currentWorkspaceMode, 'fileName =', fileName);
-        
-        if (currentWorkspaceMode === 'local') {
-          // Return instructions for client-side execution
-          console.log('Returning local operation instructions for:', fileName);
-          return {
-            success: true,
-            localOperation: true,
-            operation: 'create',
-            data: { fileName, content },
-            fileName,
-            content: content.slice(0, 200) + (content.length > 200 ? '...' : ''),
-            message: `Created file: ${fileName}. ${reason}`
-          };
-        }
-        
-        // Handle remote (server-side) operation directly
-        console.log('Performing remote file operation for:', fileName);
-        await ensureWorkspaceDir();
-        
         if (!isValidPath(fileName)) {
+          console.error('❌ [Tool] createFile: Invalid file path:', fileName);
           return { success: false, error: 'Invalid file path' };
         }
 
-        const fullPath = path.join(WORKSPACE_DIR, fileName);
-        await fs.mkdir(path.dirname(fullPath), { recursive: true });
-        await fs.writeFile(fullPath, content, 'utf-8');
-
-        return {
-          success: true,
+        console.log('✅ [Tool] createFile: Path validation passed');
+        
+        // Use the appropriate storage method
+        const result = await createFileInStorage(fileName, content);
+        console.log('✅ [Tool] createFile: File storage completed:', result);
+        
+        const response = { 
+          success: true, 
           fileName,
-          content: content.slice(0, 200) + (content.length > 200 ? '...' : ''),
-          message: `Created file: ${fileName}. ${reason}`
+          message: `Created file: ${fileName}. ${reason}`,
+          content
         };
+        
+        console.log('✅ [Tool] createFile: Success response:', response);
+        return response;
       } catch (error) {
+        console.error('❌ [Tool] createFile: Error occurred:', {
+          fileName,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        
         return { 
           success: false, 
           error: `Failed to create file: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -87,47 +207,58 @@ export const aiTools = {
   // Tool for updating existing files
   updateFile: tool({
     description: 'Update an existing file with new content',
-    parameters: z.object({
+    inputSchema: z.object({
       fileName: z.string().describe('Name of the file to update'),
       content: z.string().describe('New content for the file'),
       reason: z.string().describe('Brief explanation of what changes were made'),
     }),
     execute: async ({ fileName, content, reason }) => {
+      console.log('✏️ [Tool] updateFile called:', {
+        fileName,
+        contentLength: content.length,
+        reason,
+        isProduction: isProductionEnvironment(),
+        timestamp: new Date().toISOString()
+      });
+      
       try {
-        console.log('AI Tools updateFile: mode =', currentWorkspaceMode, 'fileName =', fileName);
-        
-        if (currentWorkspaceMode === 'local') {
-          return {
-            success: true,
-            localOperation: true,
-            operation: 'update',
-            data: { fileName, content },
-            fileName,
-            content: content.slice(0, 200) + (content.length > 200 ? '...' : ''),
-            message: `Updated file: ${fileName}. ${reason}`
-          };
-        }
-        
-        await ensureWorkspaceDir();
         if (!isValidPath(fileName)) {
+          console.error('❌ [Tool] updateFile: Invalid file path:', fileName);
           return { success: false, error: 'Invalid file path' };
         }
 
-        const fullPath = path.join(WORKSPACE_DIR, fileName);
-        try {
-          await fs.access(fullPath);
-        } catch {
-          return { success: false, error: 'File does not exist' };
-        }
-        await fs.writeFile(fullPath, content, 'utf-8');
+        console.log('✅ [Tool] updateFile: Path validation passed');
 
-        return {
-          success: true,
+        // Ensure file exists; if not, create it first
+        try {
+          console.log('🔍 [Tool] updateFile: Checking if file exists...');
+          await readFileFromStorage(fileName);
+          console.log('✅ [Tool] updateFile: File exists, proceeding with update');
+        } catch {
+          console.warn('⚠️ [Tool] updateFile: File missing, creating before update');
+          await createFileInStorage(fileName, '');
+        }
+        
+        // Update the file using appropriate storage method
+        const result = await updateFileInStorage(fileName, content);
+        console.log('✅ [Tool] updateFile: File storage completed:', result);
+        
+        const response = { 
+          success: true, 
           fileName,
-          content: content.slice(0, 200) + (content.length > 200 ? '...' : ''),
-          message: `Updated file: ${fileName}. ${reason}`
+          message: `Updated file: ${fileName}. ${reason}`,
+          content
         };
+        
+        console.log('✅ [Tool] updateFile: Success response:', response);
+        return response;
       } catch (error) {
+        console.error('❌ [Tool] updateFile: Error occurred:', {
+          fileName,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        
         return { 
           success: false, 
           error: `Failed to update file: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -139,40 +270,47 @@ export const aiTools = {
   // Tool for reading file contents
   readFile: tool({
     description: 'Read the contents of a file',
-    parameters: z.object({
+    inputSchema: z.object({
       fileName: z.string().describe('Name of the file to read'),
     }),
     execute: async ({ fileName }) => {
+      console.log('📖 [Tool] readFile called:', {
+        fileName,
+        isProduction: isProductionEnvironment(),
+        timestamp: new Date().toISOString()
+      });
+      
       try {
-        console.log('AI Tools readFile: mode =', currentWorkspaceMode, 'fileName =', fileName);
-        
-        if (currentWorkspaceMode === 'local') {
-          return {
-            success: true,
-            localOperation: true,
-            operation: 'read',
-            data: { fileName },
-            fileName,
-            content: '',
-            message: `Read file: ${fileName}`
-          };
-        }
-        
-        await ensureWorkspaceDir();
         if (!isValidPath(fileName)) {
+          console.error('❌ [Tool] readFile: Invalid file path:', fileName);
           return { success: false, error: 'Invalid file path' };
         }
 
-        const fullPath = path.join(WORKSPACE_DIR, fileName);
-        const content = await fs.readFile(fullPath, 'utf-8');
+        console.log('✅ [Tool] readFile: Path validation passed');
 
-        return {
-          success: true,
+        // Read file using appropriate storage method
+        const content = await readFileFromStorage(fileName);
+        console.log('✅ [Tool] readFile: File read successfully:', {
+          fileName,
+          contentLength: content.length
+        });
+        
+        const response = { 
+          success: true, 
           fileName,
           content,
           message: `Read file: ${fileName}`
         };
+        
+        console.log('✅ [Tool] readFile: Success response (content truncated in log)');
+        return response;
       } catch (error) {
+        console.error('❌ [Tool] readFile: Error occurred:', {
+          fileName,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        
         return { 
           success: false, 
           error: `Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -184,43 +322,20 @@ export const aiTools = {
   // Tool for listing files in the workspace
   listFiles: tool({
     description: 'List all files in the workspace directory',
-    parameters: z.object({
+    inputSchema: z.object({
       directory: z.string().optional().describe('Subdirectory to list (optional, defaults to root)'),
     }),
     execute: async ({ directory = '' }) => {
       try {
-        console.log('AI Tools listFiles: mode =', currentWorkspaceMode, 'directory =', directory);
-        
-        if (currentWorkspaceMode === 'local') {
-          return {
-            success: true,
-            localOperation: true,
-            operation: 'list',
-            data: { directory },
-            files: [],
-            directories: [],
-            message: `Listed files from local workspace`
-          };
-        }
-        
-        await ensureWorkspaceDir();
         if (!isValidPath(directory)) {
           return { success: false, error: 'Invalid directory path' };
         }
 
-        const fullPath = path.join(WORKSPACE_DIR, directory);
-        const items = await fs.readdir(fullPath, { withFileTypes: true });
-
-        const files = items
-          .filter(item => item.isFile())
-          .map(item => item.name);
-          
-        const directories = items
-          .filter(item => item.isDirectory())
-          .map(item => item.name);
-
-        return {
-          success: true,
+        // List files using appropriate storage method
+        const { files, directories } = await listFilesInStorage(directory);
+        
+        return { 
+          success: true, 
           files,
           directories,
           message: `Listed ${files.length} files and ${directories.length} directories`
@@ -237,35 +352,21 @@ export const aiTools = {
   // Tool for deleting files
   deleteFile: tool({
     description: 'Delete a file from the workspace',
-    parameters: z.object({
+    inputSchema: z.object({
       fileName: z.string().describe('Name of the file to delete'),
       reason: z.string().describe('Brief explanation of why this file is being deleted'),
     }),
     execute: async ({ fileName, reason }) => {
       try {
-        console.log('AI Tools deleteFile: mode =', currentWorkspaceMode, 'fileName =', fileName);
-        
-        if (currentWorkspaceMode === 'local') {
-          return {
-            success: true,
-            localOperation: true,
-            operation: 'delete',
-            data: { fileName },
-            fileName,
-            message: `Deleted file: ${fileName}. ${reason}`
-          };
-        }
-        
-        await ensureWorkspaceDir();
         if (!isValidPath(fileName)) {
           return { success: false, error: 'Invalid file path' };
         }
 
-        const fullPath = path.join(WORKSPACE_DIR, fileName);
-        await fs.unlink(fullPath);
-
-        return {
-          success: true,
+        // Delete file using appropriate storage method
+        await deleteFileFromStorage(fileName);
+        
+        return { 
+          success: true, 
           fileName,
           message: `Deleted file: ${fileName}. ${reason}`
         };

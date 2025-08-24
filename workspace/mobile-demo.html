@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile-Friendly Baby Cursor Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #4f46e5;
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .content {
+            padding: 2rem;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid #4f46e5;
+        }
+        
+        .feature-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            width: 40px;
+            text-align: center;
+        }
+        
+        .feature-text h3 {
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+        }
+        
+        .feature-text p {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .cta {
+            background: #f1f5f9;
+            padding: 2rem;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: #4f46e5;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #4338ca;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .header {
+                padding: 1.5rem;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .content {
+                padding: 1.5rem;
+            }
+            
+            .feature {
+                flex-direction: column;
+                text-align: center;
+                padding: 1.5rem;
+            }
+            
+            .feature-icon {
+                margin-right: 0;
+                margin-bottom: 0.5rem;
+            }
+        }
+        
+        /* Interactive elements */
+        .interactive-demo {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: #fefefe;
+            border: 2px dashed #e2e8f0;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .demo-button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .demo-button:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        
+        .demo-output {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f0f9ff;
+            border-radius: 6px;
+            color: #0369a1;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Mobile Baby Cursor</h1>
+            <p>Your pocket-sized web development IDE</p>
+        </div>
+        
+        <div class="content">
+            <div class="feature">
+                <div class="feature-icon">📱</div>
+                <div class="feature-text">
+                    <h3>Mobile-First Design</h3>
+                    <p>File selector at the top, floating controls at bottom - just like native mobile apps!</p>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🚀</div>
+                <div class="feature-text">
+                    <h3>Touch-Friendly Controls</h3>
+                    <p>Large tap targets for Code, Preview, Split, and Design modes</p>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">💬</div>
+                <div class="feature-text">
+                    <h3>Simple Chat Interface</h3>
+                    <p>Quick AI assistance with file context - no complex panels to manage</p>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🎨</div>
+                <div class="feature-text">
+                    <h3>Responsive Preview</h3>
+                    <p>Test your designs on mobile, tablet, and desktop viewports</p>
+                </div>
+            </div>
+            
+            <div class="interactive-demo">
+                <h3>Try the Interactive Demo</h3>
+                <p>Tap the buttons to see mobile-optimized interactions!</p>
+                <button class="demo-button" onclick="showMessage('Code mode activated! 👨‍💻')">Code</button>
+                <button class="demo-button" onclick="showMessage('Preview mode - see your creation! 👀')">Preview</button>
+                <button class="demo-button" onclick="showMessage('Split view - best of both worlds! ⚡')">Split</button>
+                <button class="demo-button" onclick="showMessage('Design mode - visual editing! 🎨')">Design</button>
+                <div id="demo-output" class="demo-output" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <div class="cta">
+            <h3>Ready to Code on Mobile?</h3>
+            <p>Switch to a mobile device or resize your browser to see the mobile layout!</p>
+            <a href="#" class="btn" onclick="alert('Mobile mode is automatically activated on screens < 768px wide!')">See Mobile Mode</a>
+        </div>
+    </div>
+    
+    <script>
+        function showMessage(message) {
+            const output = document.getElementById('demo-output');
+            output.textContent = message;
+            output.style.display = 'block';
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                output.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Show viewport size info
+        function updateViewportInfo() {
+            const width = window.innerWidth;
+            const info = width < 768 ? 'Mobile' : width < 1024 ? 'Tablet' : 'Desktop';
+            console.log(`Current viewport: ${info} (${width}px)`);
+        }
+        
+        window.addEventListener('resize', updateViewportInfo);
+        updateViewportInfo();
+    </script>
+</body>
+</html>
