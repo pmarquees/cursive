@@ -209,16 +209,43 @@ Happy coding! 🚀`
   };
 
   const handleFileSelect = async (fileName: string) => {
+    console.log('🔍 [Page] handleFileSelect called:', { fileName, hasInOpenFiles: !!openFiles[fileName] });
     setActiveFile(fileName);
     
     // Load file content if not already loaded
     if (!openFiles[fileName]) {
       const file = files.find(f => f.name === fileName);
+      console.log('📂 [Page] Found file in files array:', { 
+        fileName, 
+        found: !!file, 
+        hasContent: file?.content !== undefined,
+        contentLength: file?.content?.length || 0
+      });
+      
       if (file && file.content !== undefined) {
+        console.log('✅ [Page] Loading content from files array');
         setOpenFiles(prev => ({
           ...prev,
           [fileName]: file.content!
         }));
+      } else {
+        // If content not in files array, try to fetch it
+        console.log('🔄 [Page] Content not in files array, fetching from API...');
+        try {
+          const fetchedFile = await getFile(file?.path || fileName);
+          console.log('✅ [Page] Fetched file content:', { 
+            name: fetchedFile.name,
+            contentLength: fetchedFile.content?.length || 0 
+          });
+          if (fetchedFile.content !== undefined) {
+            setOpenFiles(prev => ({
+              ...prev,
+              [fileName]: fetchedFile.content!
+            }));
+          }
+        } catch (error) {
+          console.error('❌ [Page] Failed to fetch file content:', error);
+        }
       }
     }
     
