@@ -403,8 +403,16 @@ export async function listFiles(path: string = ''): Promise<FileItem[]> {
             const contentResponse = await fetch(`/api/blob/get?path=${encodeURIComponent(file.path)}`);
             if (contentResponse.ok) {
               const contentData = await contentResponse.json();
-              console.log(`✅ [FileAPI] Loaded content for ${file.path}:`, { contentLength: contentData.content?.length || 0 });
-              return { ...file, content: contentData.content };
+              
+              // Handle both old format { type: "file", file: { name, path, content } }
+              // and new format { name, path, content }
+              const content = contentData.file?.content || contentData.content;
+              
+              console.log(`✅ [FileAPI] Loaded content for ${file.path}:`, { 
+                contentLength: content?.length || 0,
+                format: contentData.file ? 'nested' : 'flat'
+              });
+              return { ...file, content };
             } else {
               console.warn(`❌ [FileAPI] Failed to load content for ${file.path}: ${contentResponse.status}`);
             }
@@ -683,7 +691,14 @@ export async function getFile(path: string): Promise<FileItem> {
       if (!response.ok) {
         throw new Error('Failed to get file from blob storage');
       }
-      return response.json();
+      const data = await response.json();
+      
+      // Handle both old format { type: "file", file: { name, path, content } }
+      // and new format { name, path, content }
+      if (data.file) {
+        return data.file;
+      }
+      return data;
     } catch (error) {
       console.warn('Blob storage failed, using localStorage:', error);
       const files = getLocalStorageFiles();
