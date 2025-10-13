@@ -80,14 +80,11 @@ export async function GET(request: NextRequest) {
       contentLength: content.length
     });
     
+    // Return a plain file object to match client expectations
     return NextResponse.json({
-      type: 'file',
-
-      file: {
-        name,
-        path,
-        content
-      }
+      name,
+      path,
+      content
     });
   } catch (error) {
     console.error('❌ [Blob] Error getting file:', {

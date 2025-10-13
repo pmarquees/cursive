@@ -35,17 +35,15 @@ export async function POST(request: NextRequest) {
     
     const relativePath = fullPath.replace('files/', '');
     
+    // Return a proper FileItem in `file`
     return NextResponse.json({
       success: true,
       file: {
+        name,
         type: 'file',
-
-        file: {
-          name,
-          path: relativePath,
-          content,
-          url
-        }
+        path: relativePath,
+        content,
+        url
       },
     });
   } catch (error) {
