@@ -209,25 +209,34 @@ Happy coding! 🚀`
   };
 
   const handleFileSelect = async (fileName: string) => {
-    console.log('🔍 [Page] handleFileSelect called:', { fileName, hasInOpenFiles: !!openFiles[fileName] });
-    setActiveFile(fileName);
+    console.log('🔍 [Page] handleFileSelect called:', { 
+      fileName, 
+      hasInOpenFiles: !!openFiles[fileName],
+      openFilesKeys: Object.keys(openFiles),
+      filesInArray: files.map(f => ({ name: f.name, path: f.path, hasContent: !!f.content }))
+    });
     
-    // Load file content if not already loaded
+    // Load file content BEFORE setting active file to avoid race condition
     if (!openFiles[fileName]) {
       const file = files.find(f => f.name === fileName);
       console.log('📂 [Page] Found file in files array:', { 
         fileName, 
         found: !!file, 
         hasContent: file?.content !== undefined,
-        contentLength: file?.content?.length || 0
+        contentLength: file?.content?.length || 0,
+        filePath: file?.path
       });
       
       if (file && file.content !== undefined) {
         console.log('✅ [Page] Loading content from files array');
-        setOpenFiles(prev => ({
-          ...prev,
-          [fileName]: file.content!
-        }));
+        setOpenFiles(prev => {
+          const updated = {
+            ...prev,
+            [fileName]: file.content!
+          };
+          console.log('📝 [Page] Updated openFiles:', Object.keys(updated));
+          return updated;
+        });
       } else {
         // If content not in files array, try to fetch it
         console.log('🔄 [Page] Content not in files array, fetching from API...');
@@ -235,19 +244,29 @@ Happy coding! 🚀`
           const fetchedFile = await getFile(file?.path || fileName);
           console.log('✅ [Page] Fetched file content:', { 
             name: fetchedFile.name,
+            path: fetchedFile.path,
             contentLength: fetchedFile.content?.length || 0 
           });
           if (fetchedFile.content !== undefined) {
-            setOpenFiles(prev => ({
-              ...prev,
-              [fileName]: fetchedFile.content!
-            }));
+            setOpenFiles(prev => {
+              const updated = {
+                ...prev,
+                [fileName]: fetchedFile.content!
+              };
+              console.log('📝 [Page] Updated openFiles after fetch:', Object.keys(updated));
+              return updated;
+            });
           }
         } catch (error) {
           console.error('❌ [Page] Failed to fetch file content:', error);
         }
       }
+    } else {
+      console.log('✅ [Page] File already in openFiles, skipping load');
     }
+    
+    // Set active file AFTER loading content
+    setActiveFile(fileName);
     
     // On mobile, default to code view when opening a file
     if (isMobile) {

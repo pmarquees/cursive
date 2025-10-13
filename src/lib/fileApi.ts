@@ -403,6 +403,7 @@ export async function listFiles(path: string = ''): Promise<FileItem[]> {
             const contentResponse = await fetch(`/api/blob/get?path=${encodeURIComponent(file.path)}`);
             if (contentResponse.ok) {
               const contentData = await contentResponse.json();
+              console.log(`✅ [FileAPI] Loaded content for ${file.path}:`, { contentLength: contentData.content?.length || 0 });
               return { ...file, content: contentData.content };
             } else {
               console.warn(`❌ [FileAPI] Failed to load content for ${file.path}: ${contentResponse.status}`);
