@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, ArrowRight, Settings, MessageSquare, X, File, Maximize2, Minimize2, Eye, Send, Monitor, Tablet, Smartphone } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings, MessageSquare, X, File, Maximize2, Minimize2, Eye, Send, Monitor, Tablet, Smartphone, Terminal } from 'lucide-react';
 import { DesignPanel } from './DesignPanel';
 
 const MonacoEditor = dynamic(
@@ -22,6 +22,8 @@ interface EditorAreaProps {
   streamingFiles?: Set<string>;
   unsavedFiles?: Set<string>;
   onManualSave?: (fileName: string) => void;
+  isTerminalOpen?: boolean;
+  onToggleTerminal?: () => void;
   // Mobile-specific props
   forcedView?: 'code' | 'preview' | 'split' | 'design';
   hideTabs?: boolean;
@@ -35,10 +37,11 @@ interface EditorAreaProps {
   onStyleChange?: (property: string, value: string) => void;
 }
 
-export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, onFileSelect, isPreviewFullscreen, onTogglePreviewFullscreen, onAddQueuedMessage, streamingFiles, unsavedFiles, onManualSave, forcedView, hideTabs, hideViewControls, onElementSelect, onStyleChange }: EditorAreaProps) {
+export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, onFileSelect, isPreviewFullscreen, onTogglePreviewFullscreen, onAddQueuedMessage, streamingFiles, unsavedFiles, onManualSave, isTerminalOpen, onToggleTerminal, forcedView, hideTabs, hideViewControls, onElementSelect, onStyleChange }: EditorAreaProps) {
   const [activeView, setActiveView] = useState<'code' | 'preview' | 'split' | 'design'>('code');
   const [deviceView, setDeviceView] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [isInspectionMode, setIsInspectionMode] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [inspectionPrompt, setInspectionPrompt] = useState<{
     element: string;
     position: { x: number; y: number };
@@ -77,6 +80,22 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeFile, onManualSave]);
+
+  // Sync Monaco theme with the global theme toggle
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const updateTheme = () => {
+      setIsDarkTheme(document.documentElement.classList.contains('dark'));
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(() => updateTheme());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Get device-specific styles for responsive preview
   const getDeviceStyles = () => {
@@ -649,6 +668,13 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
             <button className="size-7 p-1 text-muted-foreground hover:text-foreground">
               <Settings size={16} />
             </button>
+            <button
+              className={`size-7 p-1 ${isTerminalOpen ? 'text-foreground' : 'text-muted-foreground'} hover:text-foreground`}
+              onClick={onToggleTerminal}
+              title="Toggle terminal"
+            >
+              <Terminal size={16} />
+            </button>
             <button className="size-7 p-1 text-muted-foreground hover:text-foreground">
               <MessageSquare size={16} />
             </button>
@@ -733,7 +759,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                 language={getLanguage(activeFile)}
                 value={currentFileContent}
                 onChange={handleEditorChange}
-                theme="vs-dark"
+                theme={isDarkTheme ? 'vs-dark' : 'vs'}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 12,
@@ -813,7 +839,7 @@ export function EditorArea({ openFiles, activeFile, onFileChange, onFileClose, o
                   language={getLanguage(activeFile)}
                   value={currentFileContent}
                   onChange={handleEditorChange}
-                  theme="vs-dark"
+                  theme={isDarkTheme ? 'vs-dark' : 'vs'}
                   options={{
                     minimap: { enabled: false },
                     fontSize: 12,

@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { EditorArea } from '@/components/EditorArea';
 import { ChatPanel } from '@/components/ChatPanel';
 import { StatusBar } from '@/components/StatusBar';
+import { TerminalPanel } from '@/components/TerminalPanel';
 import { MobileFileSelector } from '@/components/MobileFileSelector';
 import { MobileBottomControls } from '@/components/MobileBottomControls';
 import { MobileChatInput } from '@/components/MobileChatInput';
@@ -20,6 +21,7 @@ export default function BabyCursor() {
   const [openFiles, setOpenFiles] = useState<{[key: string]: string}>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [queuedMessages, setQueuedMessages] = useState<Array<{
     id: string;
     fileName: string;
@@ -561,6 +563,8 @@ Happy coding! 🚀`
             streamingFiles={streamingFiles}
             unsavedFiles={unsavedFiles}
             onManualSave={handleManualSave}
+            isTerminalOpen={isTerminalOpen}
+            onToggleTerminal={() => setIsTerminalOpen(prev => !prev)}
             // Pass mobile view state
             forcedView={mobileView}
             hideTabs={true}
@@ -601,81 +605,89 @@ Happy coding! 🚀`
   return (
     <div className="flex flex-col h-dvh bg-background text-foreground pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] overflow-hidden">
       {isMacElectron && <div className="electron-titlebar" />}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        {!isPreviewFullscreen && (
-          <div 
-            className="bg-card flex flex-col h-full text-foreground relative transition-colors duration-150 select-none border-r border-border"
-            style={{ width: `${sidebarWidth}px` }}
-          >
-            <div className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/50 active:bg-primary transition-colors duration-150 ease-in-out"></div>
-            <Sidebar 
-              files={files} 
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar */}
+          {!isPreviewFullscreen && (
+            <div 
+              className="bg-card flex flex-col h-full text-foreground relative transition-colors duration-150 select-none border-r border-border"
+              style={{ width: `${sidebarWidth}px` }}
+            >
+              <div className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/50 active:bg-primary transition-colors duration-150 ease-in-out"></div>
+              <Sidebar 
+                files={files} 
+                activeFile={activeFile} 
+                onFileSelect={handleFileSelect}
+                onCreateFile={handleCreateFile}
+                onDeleteFile={handleDeleteFile}
+                mode={isDesignMode ? 'design' : 'files'}
+                selectedElement={selectedElement}
+              onStyleChange={handleStyleChange}
+              onConnectLocal={async () => {
+                try {
+                  const { label } = await connectToLocalFolder();
+                  console.log('✅ Connected local folder:', label);
+                  await loadFiles();
+                } catch (e) {
+                  console.error('Failed to connect to local folder:', e);
+                }
+              }}
+              />
+            </div>
+          )}
+
+          {/* Main Editor Area */}
+          <div className="flex-1 flex flex-col overflow-hidden relative">
+            <EditorArea 
+              openFiles={openFiles}
               activeFile={activeFile} 
+              onFileChange={handleFileChange}
+              onFileClose={handleFileClose}
               onFileSelect={handleFileSelect}
-              onCreateFile={handleCreateFile}
-              onDeleteFile={handleDeleteFile}
-              mode={isDesignMode ? 'design' : 'files'}
-              selectedElement={selectedElement}
-            onStyleChange={handleStyleChange}
-            onConnectLocal={async () => {
-              try {
-                const { label } = await connectToLocalFolder();
-                console.log('✅ Connected local folder:', label);
-                await loadFiles();
-              } catch (e) {
-                console.error('Failed to connect to local folder:', e);
-              }
-            }}
+              isPreviewFullscreen={isPreviewFullscreen}
+              onTogglePreviewFullscreen={() => setIsPreviewFullscreen(!isPreviewFullscreen)}
+              onAddQueuedMessage={(element: string, message: string) => handleAddQueuedMessage(activeFile, element, message)}
+              streamingFiles={streamingFiles}
+              unsavedFiles={unsavedFiles}
+              onManualSave={handleManualSave}
+              onElementSelect={handleElementSelect}
+              onStyleChange={handleStyleChange}
+              isTerminalOpen={isTerminalOpen}
+              onToggleTerminal={() => setIsTerminalOpen(prev => !prev)}
             />
           </div>
-        )}
 
-        {/* Main Editor Area */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          <EditorArea 
-            openFiles={openFiles}
-            activeFile={activeFile} 
-            onFileChange={handleFileChange}
-            onFileClose={handleFileClose}
-            onFileSelect={handleFileSelect}
-            isPreviewFullscreen={isPreviewFullscreen}
-            onTogglePreviewFullscreen={() => setIsPreviewFullscreen(!isPreviewFullscreen)}
-            onAddQueuedMessage={(element: string, message: string) => handleAddQueuedMessage(activeFile, element, message)}
-            streamingFiles={streamingFiles}
-            unsavedFiles={unsavedFiles}
-            onManualSave={handleManualSave}
-            onElementSelect={handleElementSelect}
-            onStyleChange={handleStyleChange}
-          />
-        </div>
-
-        {/* Chat Panel */}
-        {!isPreviewFullscreen && (
-          <div className="flex h-full">
-            <div 
-              className="flex-shrink-0 border-l border-border first:border-l-0"
-              style={{ minWidth: `${chatPanelWidth}px`, width: `${chatPanelWidth}px`, opacity: 1 }}
-            >
-              <div className="relative w-full h-full">
-                <div 
-                  className="flex flex-col bg-card h-full relative overflow-hidden border-l border-border"
-                  style={{ width: `${chatPanelWidth}px` }}
-                >
-                  <div className="absolute top-0 left-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/50 active:bg-primary transition-colors duration-150 ease-in-out"></div>
-                  <ChatPanel 
-                    files={files} 
-                    onFileChange={refreshFileContents}
-                    onForceRefreshFile={forceRefreshFile}
-                    queuedMessages={queuedMessages}
-                    onClearQueuedMessage={(id) => {
-                      setQueuedMessages(prev => prev.filter(msg => msg.id !== id));
-                    }}
-                  />
+          {/* Chat Panel */}
+          {!isPreviewFullscreen && (
+            <div className="flex h-full">
+              <div 
+                className="flex-shrink-0 border-l border-border first:border-l-0"
+                style={{ minWidth: `${chatPanelWidth}px`, width: `${chatPanelWidth}px`, opacity: 1 }}
+              >
+                <div className="relative w-full h-full">
+                  <div 
+                    className="flex flex-col bg-card h-full relative overflow-hidden border-l border-border"
+                    style={{ width: `${chatPanelWidth}px` }}
+                  >
+                    <div className="absolute top-0 left-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/50 active:bg-primary transition-colors duration-150 ease-in-out"></div>
+                    <ChatPanel 
+                      files={files} 
+                      onFileChange={refreshFileContents}
+                      onForceRefreshFile={forceRefreshFile}
+                      queuedMessages={queuedMessages}
+                      onClearQueuedMessage={(id) => {
+                        setQueuedMessages(prev => prev.filter(msg => msg.id !== id));
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+        </div>
+
+        {isTerminalOpen && (
+          <TerminalPanel onClose={() => setIsTerminalOpen(false)} />
         )}
       </div>
 

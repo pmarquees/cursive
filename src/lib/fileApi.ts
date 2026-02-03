@@ -13,6 +13,26 @@ import {
   isFileSystemAccessSupported as localFsSupported,
 } from '@/lib/localFs';
 
+type ElectronFsApi = {
+  selectDirectory?: () => Promise<string | null>;
+  fsListAll?: (root: string) => Promise<Array<{ name: string; path: string; type: 'file' | 'directory'; content?: string }>>;
+  fsReadFile?: (root: string, path: string) => Promise<string>;
+  fsWriteFile?: (root: string, path: string, content: string) => Promise<void>;
+  fsCreateEntry?: (root: string, path: string, type: 'file' | 'directory', content?: string) => Promise<void>;
+  fsDeleteEntry?: (root: string, path: string) => Promise<void>;
+};
+
+function getElectronApi(): ElectronFsApi | null {
+  if (typeof window === 'undefined') return null;
+  const api = (window as unknown as { electronAPI?: ElectronFsApi }).electronAPI;
+  return api ?? null;
+}
+
+function hasElectronFs(): boolean {
+  const api = getElectronApi();
+  return !!api?.fsListAll && !!api?.fsReadFile && !!api?.fsWriteFile && !!api?.fsCreateEntry && !!api?.fsDeleteEntry;
+}
+
 export interface FileItem {
   name: string;
   type: 'file' | 'directory';
@@ -36,10 +56,12 @@ const isBlobStorageAvailable = () => {
 
 // LocalStorage-based file system for production
 const LOCAL_STORAGE_KEY = 'baby-cursor-files';
+const LOCAL_FOLDER_PATH_KEY = 'baby-cursor-local-folder-path';
 
 // Local folder mode toggle
 let useLocalFolderMode = false;
 let localFolderLabel = '';
+let localFolderPath = '';
 
 export function enableLocalFolderMode(label?: string) {
   useLocalFolderMode = true;
@@ -59,7 +81,45 @@ export function getLocalFolderLabel(): string {
   return localFolderLabel || 'Local';
 }
 
+export function getLocalFolderPath(): string {
+  if (!localFolderPath && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(LOCAL_FOLDER_PATH_KEY);
+      localFolderPath = stored || '';
+    } catch {
+      localFolderPath = '';
+    }
+  }
+  return localFolderPath;
+}
+
+export function setLocalFolderPath(pathValue: string): void {
+  localFolderPath = pathValue;
+  if (typeof window === 'undefined') return;
+  try {
+    if (pathValue) {
+      localStorage.setItem(LOCAL_FOLDER_PATH_KEY, pathValue);
+    } else {
+      localStorage.removeItem(LOCAL_FOLDER_PATH_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export async function connectToLocalFolder(): Promise<{ label: string }>{
+  const electronApi = getElectronApi();
+  if (electronApi?.selectDirectory) {
+    const selected = await electronApi.selectDirectory();
+    if (!selected) {
+      throw new Error('No folder selected');
+    }
+    const label = selected.split(/[\\/]/).pop() || 'Local';
+    enableLocalFolderMode(label);
+    setLocalFolderPath(selected);
+    return { label };
+  }
+
   if (!localFsSupported()) {
     throw new Error('File System Access API not supported in this browser');
   }
@@ -70,7 +130,9 @@ export async function connectToLocalFolder(): Promise<{ label: string }>{
 
 export function disconnectLocalFolder(): void {
   disableLocalFolderMode();
-  localDisconnectDirectory();
+  if (!hasElectronFs()) {
+    localDisconnectDirectory();
+  }
 }
 
 // Get files from localStorage
@@ -331,18 +393,33 @@ function initializeDefaultFiles() {
 export async function listFiles(path: string = ''): Promise<FileItem[]> {
   // Local folder mode via File System Access API
   if (useLocalFolderMode) {
-    const dir = getConnectedDirectoryHandle();
-    if (!dir) {
-      throw new Error('Local folder not connected');
+    if (hasElectronFs()) {
+      const api = getElectronApi();
+      const rootPath = getLocalFolderPath();
+      if (!api?.fsListAll || !rootPath) {
+        throw new Error('Local folder not connected');
+      }
+      const items = await api.fsListAll(rootPath);
+      return items.map((it) => ({
+        name: it.path || it.name,
+        type: it.type,
+        path: it.path || it.name,
+        content: it.content,
+      }));
+    } else {
+      const dir = getConnectedDirectoryHandle();
+      if (!dir) {
+        throw new Error('Local folder not connected');
+      }
+      const items = await localListAll(dir);
+      // Represent nested files using their relative path as the display name to avoid collisions
+      return items.map((it) => ({
+        name: it.path || it.name,
+        type: it.type,
+        path: it.path || it.name,
+        content: it.content,
+      }));
     }
-    const items = await localListAll(dir);
-    // Represent nested files using their relative path as the display name to avoid collisions
-    return items.map((it) => ({
-      name: it.path || it.name,
-      type: it.type,
-      path: it.path || it.name,
-      content: it.content,
-    }));
   }
 
   if (isBlobStorageAvailable()) {
@@ -445,10 +522,17 @@ export async function listFiles(path: string = ''): Promise<FileItem[]> {
 // Create file or directory
 export async function createFile(request: CreateFileRequest): Promise<FileItem> {
   if (useLocalFolderMode) {
-    const dir = getConnectedDirectoryHandle();
-    if (!dir) throw new Error('Local folder not connected');
     const fullPath = request.path ? `${request.path}/${request.name}` : request.name;
-    await localCreateEntry(dir, fullPath, request.type, request.content || '');
+    if (hasElectronFs()) {
+      const api = getElectronApi();
+      const rootPath = getLocalFolderPath();
+      if (!api?.fsCreateEntry || !rootPath) throw new Error('Local folder not connected');
+      await api.fsCreateEntry(rootPath, fullPath, request.type, request.content || '');
+    } else {
+      const dir = getConnectedDirectoryHandle();
+      if (!dir) throw new Error('Local folder not connected');
+      await localCreateEntry(dir, fullPath, request.type, request.content || '');
+    }
     return {
       name: fullPath,
       type: request.type,
@@ -529,9 +613,16 @@ export async function createFile(request: CreateFileRequest): Promise<FileItem> 
 // Save file content
 export async function saveFile(path: string, content: string): Promise<void> {
   if (useLocalFolderMode) {
-    const dir = getConnectedDirectoryHandle();
-    if (!dir) throw new Error('Local folder not connected');
-    await localWriteFile(dir, path, content);
+    if (hasElectronFs()) {
+      const api = getElectronApi();
+      const rootPath = getLocalFolderPath();
+      if (!api?.fsWriteFile || !rootPath) throw new Error('Local folder not connected');
+      await api.fsWriteFile(rootPath, path, content);
+    } else {
+      const dir = getConnectedDirectoryHandle();
+      if (!dir) throw new Error('Local folder not connected');
+      await localWriteFile(dir, path, content);
+    }
     return;
   }
 
@@ -619,9 +710,16 @@ export async function saveFile(path: string, content: string): Promise<void> {
 // Delete file or directory
 export async function deleteFile(path: string): Promise<void> {
   if (useLocalFolderMode) {
-    const dir = getConnectedDirectoryHandle();
-    if (!dir) throw new Error('Local folder not connected');
-    await localDeleteEntry(dir, path);
+    if (hasElectronFs()) {
+      const api = getElectronApi();
+      const rootPath = getLocalFolderPath();
+      if (!api?.fsDeleteEntry || !rootPath) throw new Error('Local folder not connected');
+      await api.fsDeleteEntry(rootPath, path);
+    } else {
+      const dir = getConnectedDirectoryHandle();
+      if (!dir) throw new Error('Local folder not connected');
+      await localDeleteEntry(dir, path);
+    }
     return;
   }
 
@@ -669,9 +767,17 @@ export async function deleteFile(path: string): Promise<void> {
 // Get file content
 export async function getFile(path: string): Promise<FileItem> {
   if (useLocalFolderMode) {
-    const dir = getConnectedDirectoryHandle();
-    if (!dir) throw new Error('Local folder not connected');
-    const content = await localReadFile(dir, path);
+    let content: string;
+    if (hasElectronFs()) {
+      const api = getElectronApi();
+      const rootPath = getLocalFolderPath();
+      if (!api?.fsReadFile || !rootPath) throw new Error('Local folder not connected');
+      content = await api.fsReadFile(rootPath, path);
+    } else {
+      const dir = getConnectedDirectoryHandle();
+      if (!dir) throw new Error('Local folder not connected');
+      content = await localReadFile(dir, path);
+    }
     return { name: path, type: 'file', path, content };
   }
 

@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require("electron");
 const path = require("path");
+const fs = require("fs/promises");
 const { createServer } = require("http");
 const { parse } = require("url");
 
@@ -173,3 +174,107 @@ app.on("before-quit", async () => {
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
+ipcMain.handle("app:selectDirectory", async () => {
+  if (!mainWindow) {
+    return null;
+  }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
+function resolveWithinRoot(root, target) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedTarget = path.resolve(root, target || ".");
+  if (
+    resolvedTarget !== resolvedRoot &&
+    !resolvedTarget.startsWith(resolvedRoot + path.sep)
+  ) {
+    throw new Error("Invalid path");
+  }
+  return { resolvedRoot, resolvedTarget };
+}
+
+async function listAll(root) {
+  const results = [];
+
+  async function walk(currentDir, prefix) {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const relPath = prefix ? path.join(prefix, entry.name) : entry.name;
+      const absPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        results.push({
+          name: entry.name,
+          path: relPath,
+          type: "directory"
+        });
+        await walk(absPath, relPath);
+      } else if (entry.isFile()) {
+        const content = await fs.readFile(absPath, "utf-8");
+        results.push({
+          name: entry.name,
+          path: relPath,
+          type: "file",
+          content
+        });
+      }
+    }
+  }
+
+  await walk(root, "");
+  return results;
+}
+
+ipcMain.handle("fs:listAll", async (_event, { root }) => {
+  if (!root) {
+    throw new Error("Root path is required");
+  }
+  const { resolvedRoot } = resolveWithinRoot(root, ".");
+  return await listAll(resolvedRoot);
+});
+
+ipcMain.handle("fs:readFile", async (_event, { root, path: filePath }) => {
+  if (!root || !filePath) {
+    throw new Error("Root and path are required");
+  }
+  const { resolvedTarget } = resolveWithinRoot(root, filePath);
+  return await fs.readFile(resolvedTarget, "utf-8");
+});
+
+ipcMain.handle("fs:writeFile", async (_event, { root, path: filePath, content }) => {
+  if (!root || !filePath) {
+    throw new Error("Root and path are required");
+  }
+  const { resolvedTarget } = resolveWithinRoot(root, filePath);
+  await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
+  await fs.writeFile(resolvedTarget, content ?? "", "utf-8");
+  return true;
+});
+
+ipcMain.handle("fs:createEntry", async (_event, { root, path: filePath, type, content }) => {
+  if (!root || !filePath || !type) {
+    throw new Error("Root, path, and type are required");
+  }
+  const { resolvedTarget } = resolveWithinRoot(root, filePath);
+  if (type === "directory") {
+    await fs.mkdir(resolvedTarget, { recursive: true });
+  } else {
+    await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fs.writeFile(resolvedTarget, content ?? "", "utf-8");
+  }
+  return true;
+});
+
+ipcMain.handle("fs:deleteEntry", async (_event, { root, path: filePath }) => {
+  if (!root || !filePath) {
+    throw new Error("Root and path are required");
+  }
+  const { resolvedTarget } = resolveWithinRoot(root, filePath);
+  await fs.rm(resolvedTarget, { recursive: true, force: true });
+  return true;
+});

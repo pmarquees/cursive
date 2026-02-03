@@ -50,6 +50,11 @@ export function ChatPanel({ files, onFileChange, onForceRefreshFile, queuedMessa
   const [lmstudioBaseURL, setLmstudioBaseURL] = useState('http://localhost:1234/v1');
   const [lmstudioModelId, setLmstudioModelId] = useState('');
 
+  const truncateOutput = (text: string, max = 2000) => {
+    if (text.length <= max) return text;
+    return `${text.slice(0, max)}\n... (truncated ${text.length - max} chars)`;
+  };
+
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
@@ -790,12 +795,25 @@ export function ChatPanel({ files, onFileChange, onForceRefreshFile, queuedMessa
                                           {part.type === 'tool-deleteFile' && '🗑️ Deleted file'}
                                           {part.type === 'tool-readFile' && '📖 Read file'}
                                           {part.type === 'tool-listFiles' && '📁 Listed files'}
+                                          {part.type === 'tool-runCommand' && '▶ Ran command'}
+                                          {part.type === 'tool-searchFiles' && '🔍 Searched files'}
+                                          {part.type === 'tool-listTasks' && '🧰 Listed tasks'}
                                         </div>
                                         {typeof (part.output as Record<string, unknown> | undefined)?.message === 'string' && (
                                           <div className="text-muted-foreground">{(part.output as { message: string }).message}</div>
                                         )}
                                         {typeof (part.output as Record<string, unknown> | undefined)?.error === 'string' && (
                                           <div className="text-red-500">Error: {(part.output as { error: string }).error}</div>
+                                        )}
+                                        {typeof (part.output as Record<string, unknown> | undefined)?.stdout === 'string' && (
+                                          <pre className="mt-1 text-muted-foreground whitespace-pre-wrap border border-border rounded px-2 py-1 bg-background/60">
+                                            {truncateOutput((part.output as { stdout: string }).stdout)}
+                                          </pre>
+                                        )}
+                                        {typeof (part.output as Record<string, unknown> | undefined)?.stderr === 'string' && (
+                                          <pre className="mt-1 text-red-500 whitespace-pre-wrap border border-red-500/30 rounded px-2 py-1 bg-background/60">
+                                            {truncateOutput((part.output as { stderr: string }).stderr)}
+                                          </pre>
                                         )}
                                       </div>
                                     )}

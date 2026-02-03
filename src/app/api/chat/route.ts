@@ -216,6 +216,47 @@ LOCAL MODE IS ACTIVE:
           };
         },
       }),
+      runCommand: tool({
+        description: 'Run a shell command (local mode: not available server-side)',
+        inputSchema: z.object({
+          command: z.string(),
+          cwd: z.string().optional(),
+          timeoutMs: z.number().optional(),
+          env: z.record(z.string()).optional(),
+        }),
+        execute: async () => {
+          return {
+            success: false,
+            error: 'Local mode: server cannot execute commands. Run this locally in your environment.',
+          } as const;
+        },
+      }),
+      searchFiles: tool({
+        description: 'Search files (local mode: not available server-side)',
+        inputSchema: z.object({
+          query: z.string(),
+          caseSensitive: z.boolean().optional(),
+          regex: z.boolean().optional(),
+          fileExtensions: z.array(z.string()).optional(),
+          maxResults: z.number().optional(),
+        }),
+        execute: async () => {
+          return {
+            success: false,
+            error: 'Local mode: server cannot search local files. Ask the user to provide file contents.',
+          } as const;
+        },
+      }),
+      listTasks: tool({
+        description: 'List npm scripts (local mode: not available server-side)',
+        inputSchema: z.object({}),
+        execute: async () => {
+          return {
+            success: false,
+            error: 'Local mode: server cannot read local package.json. Ask the user for scripts.',
+          } as const;
+        },
+      }),
     } as const;
 
     const result = await streamText({

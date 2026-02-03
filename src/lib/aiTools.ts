@@ -4,7 +4,9 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
+import { spawn } from 'child_process';
 import { put, del, list } from '@vercel/blob';
+import { getProjectRoot, isCommandAllowed, parseCommand, readPackageScripts, resolveCwd } from '@/lib/terminalCore';
 
 const WORKSPACE_DIR = path.join(process.cwd(), 'workspace');
 
@@ -148,6 +150,161 @@ async function deleteFileFromStorage(fileName: string) {
     const fullPath = path.join(WORKSPACE_DIR, fileName);
     await fs.unlink(fullPath);
   }
+}
+
+// Run a command safely (no shell, allowlisted)
+async function runCommandWithOutput(
+  command: string,
+  args: string[],
+  options: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }
+) {
+  const startTime = Date.now();
+  const timeoutMs = options.timeoutMs ?? 300_000;
+
+  return await new Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    durationMs: number;
+  }>((resolve, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: 'pipe'
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.setEncoding('utf8');
+    proc.stderr.setEncoding('utf8');
+
+    const handleTimeout = setTimeout(() => {
+      proc.kill('SIGTERM');
+    }, timeoutMs);
+
+    proc.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+      if (stdout.length > 200_000) {
+        stdout = stdout.slice(-200_000);
+      }
+    });
+
+    proc.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+      if (stderr.length > 200_000) {
+        stderr = stderr.slice(-200_000);
+      }
+    });
+
+    proc.on('error', (error) => {
+      clearTimeout(handleTimeout);
+      reject(error);
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(handleTimeout);
+      resolve({
+        stdout,
+        stderr,
+        exitCode: code,
+        durationMs: Date.now() - startTime
+      });
+    });
+  });
+}
+
+async function searchWorkspaceFiles(params: {
+  query: string;
+  caseSensitive?: boolean;
+  regex?: boolean;
+  fileExtensions?: string[];
+  maxResults?: number;
+}) {
+  const query = params.query;
+  const caseSensitive = params.caseSensitive ?? false;
+  const useRegex = params.regex ?? false;
+  const maxResults = params.maxResults ?? 200;
+  const allowedExtensions = params.fileExtensions?.map((ext) =>
+    ext.startsWith('.') ? ext : `.${ext}`
+  );
+
+  const matcher = useRegex
+    ? new RegExp(query, caseSensitive ? 'g' : 'gi')
+    : null;
+  const needle = caseSensitive ? query : query.toLowerCase();
+
+  const results: Array<{ fileName: string; line: string; lineNumber: number; column: number }> = [];
+
+  const ignoredDirs = new Set([
+    'node_modules',
+    '.next',
+    '.git',
+    'dist',
+    'build',
+    'out',
+    '.turbo',
+    '.vercel'
+  ]);
+
+  async function walk(dir: string) {
+    if (results.length >= maxResults) return;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (results.length >= maxResults) return;
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (ignoredDirs.has(entry.name)) continue;
+        await walk(entryPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (allowedExtensions && !allowedExtensions.some((ext) => entry.name.endsWith(ext))) {
+        continue;
+      }
+      try {
+        const content = await fs.readFile(entryPath, 'utf-8');
+        const lines = content.split(/\r?\n/);
+        for (let i = 0; i < lines.length; i += 1) {
+          if (results.length >= maxResults) break;
+          const line = lines[i];
+          if (useRegex && matcher) {
+            matcher.lastIndex = 0;
+            const match = matcher.exec(line);
+            if (match) {
+              results.push({
+                fileName: path.relative(WORKSPACE_DIR, entryPath),
+                line,
+                lineNumber: i + 1,
+                column: match.index + 1
+              });
+            }
+          } else {
+            const haystack = caseSensitive ? line : line.toLowerCase();
+            const idx = haystack.indexOf(needle);
+            if (idx !== -1) {
+              results.push({
+                fileName: path.relative(WORKSPACE_DIR, entryPath),
+                line,
+                lineNumber: i + 1,
+                column: idx + 1
+              });
+            }
+          }
+        }
+      } catch {
+        // ignore unreadable files
+      }
+    }
+  }
+
+  try {
+    await walk(WORKSPACE_DIR);
+  } catch {
+    // ignore
+  }
+
+  return results;
 }
 
 export const aiTools = {
@@ -344,6 +501,114 @@ export const aiTools = {
         return { 
           success: false, 
           error: `Failed to list files: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        };
+      }
+    },
+  }),
+
+  // Tool for searching across workspace files
+  searchFiles: tool({
+    description: 'Search text across workspace files',
+    inputSchema: z.object({
+      query: z.string().describe('Text or regex to search for'),
+      caseSensitive: z.boolean().optional().describe('Whether the search should be case sensitive'),
+      regex: z.boolean().optional().describe('Treat query as a regular expression'),
+      fileExtensions: z.array(z.string()).optional().describe('Optional list of file extensions to include'),
+      maxResults: z.number().optional().describe('Maximum number of results to return'),
+    }),
+    execute: async ({ query, caseSensitive, regex, fileExtensions, maxResults }) => {
+      try {
+        if (isProductionEnvironment()) {
+          return { success: false, error: 'Search is not available in production.' };
+        }
+        const results = await searchWorkspaceFiles({
+          query,
+          caseSensitive,
+          regex,
+          fileExtensions,
+          maxResults
+        });
+        return {
+          success: true,
+          results,
+          message: `Found ${results.length} matches for \"${query}\"`
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to search files: ${error instanceof Error ? error.message : 'Unknown error'}`
+        };
+      }
+    },
+  }),
+
+  // Tool for running a command (allowlisted)
+  runCommand: tool({
+    description: 'Run a shell command (allowlisted, no pipes) and return output',
+    inputSchema: z.object({
+      command: z.string().describe('Command to run, e.g. \"npm run lint\"'),
+      cwd: z.string().optional().describe('Optional working directory (relative to repo root)'),
+      timeoutMs: z.number().optional().describe('Optional timeout in milliseconds'),
+      env: z.record(z.string()).optional().describe('Optional environment variables'),
+    }),
+    execute: async ({ command, cwd, timeoutMs, env }) => {
+      try {
+        if (isProductionEnvironment()) {
+          return { success: false, error: 'Command execution is disabled in production.' };
+        }
+
+        const { cmd, args } = parseCommand(command);
+        if (!isCommandAllowed(cmd)) {
+          return { success: false, error: `Command \"${cmd}\" is not allowlisted.` };
+        }
+
+        const resolvedCwd = cwd ? await resolveCwd(cwd) : getProjectRoot();
+        const result = await runCommandWithOutput(cmd, args, {
+          cwd: resolvedCwd,
+          env: { ...process.env, ...(env ?? {}) },
+          timeoutMs
+        });
+
+        return {
+          success: result.exitCode === 0,
+          command,
+          cwd: resolvedCwd,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          durationMs: result.durationMs,
+          message: `Command completed with exit code ${result.exitCode ?? 'unknown'}`
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to run command: ${error instanceof Error ? error.message : 'Unknown error'}`
+        };
+      }
+    },
+  }),
+
+  // Tool for listing package scripts (tasks)
+  listTasks: tool({
+    description: 'List npm scripts from the nearest package.json',
+    inputSchema: z.object({}),
+    execute: async () => {
+      try {
+        if (isProductionEnvironment()) {
+          return { success: false, error: 'Task listing is disabled in production.' };
+        }
+        const data = await readPackageScripts();
+        return {
+          success: true,
+          scripts: data.scripts,
+          cwd: data.cwd,
+          packageJsonPath: data.packageJsonPath,
+          message: `Found ${Object.keys(data.scripts).length} scripts`
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to list tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
         };
       }
     },
