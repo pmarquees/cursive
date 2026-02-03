@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, File, Folder, Search, GitBranch, Package, MoreHorizontal, X, FolderPlus, Move, Square, Eye, Droplet, Zap, ArrowUp, Layout, Type } from 'lucide-react';
 import { FileItem, isLocalFolderMode, getLocalFolderLabel } from '@/lib/fileApi';
 
@@ -8,7 +8,7 @@ interface SidebarProps {
   files: FileItem[];
   activeFile: string;
   onFileSelect: (fileName: string) => void;
-  onCreateFile: (name: string, type?: 'file' | 'directory') => void;
+  onCreateFile: (name: string, type?: 'file' | 'directory', path?: string) => void;
   onDeleteFile: (fileName: string) => void;
   mode?: 'files' | 'design';
   selectedElement?: {
@@ -19,6 +19,75 @@ interface SidebarProps {
   onStyleChange?: (property: string, value: string) => void;
   onConnectLocal?: () => void;
 }
+
+type TreeNode = {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  children: TreeNode[];
+};
+
+type VisibleNode = {
+  node: TreeNode;
+  depth: number;
+  isDirectory: boolean;
+  hasChildren: boolean;
+  expanded: boolean;
+};
+
+const TreeRow = memo(function TreeRow({
+  item,
+  isSelected,
+  isActive,
+  onClick,
+  onDelete
+}: {
+  item: VisibleNode;
+  isSelected: boolean;
+  isActive: boolean;
+  onClick: (node: TreeNode) => void;
+  onDelete: (node: TreeNode, e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const { node, depth, isDirectory, hasChildren, expanded } = item;
+
+  return (
+    <div
+      className={`flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer group ${
+        isSelected || isActive ? 'bg-muted' : ''
+      }`}
+      style={{ paddingLeft: `${depth * 12}px` }}
+      onClick={() => onClick(node)}
+    >
+      {isDirectory ? (
+        hasChildren || node.path === '' ? (
+          expanded ? (
+            <ChevronDown size={12} className="mr-1 text-muted-foreground" />
+          ) : (
+            <ChevronRight size={12} className="mr-1 text-muted-foreground" />
+          )
+        ) : (
+          <span className="w-[12px] mr-1" />
+        )
+      ) : (
+        <span className="w-[12px] mr-1" />
+      )}
+      {isDirectory ? (
+        <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
+      ) : (
+        <File size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
+      )}
+      <span className="truncate flex-1">{node.name}</span>
+      {node.path !== '' && (
+        <button
+          className="opacity-0 group-hover:opacity-100 size-4 flex items-center justify-center text-muted-foreground hover:text-red-500"
+          onClick={(e) => onDelete(node, e)}
+        >
+          <X size={12} />
+        </button>
+      )}
+    </div>
+  );
+});
 
 export function Sidebar({ 
   files, 
@@ -32,10 +101,117 @@ export function Sidebar({
   onConnectLocal
 }: SidebarProps) {
   const [isFilesExpanded, setIsFilesExpanded] = useState(true);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [selectedFolder, setSelectedFolder] = useState('');
 
   const [isCreating, setIsCreating] = useState(false);
   const [createType, setCreateType] = useState<'file' | 'directory'>('file');
   const [newFileName, setNewFileName] = useState('');
+
+  const treeRoot = useMemo<TreeNode>(() => {
+    const root: TreeNode = {
+      name: 'workspace',
+      path: '',
+      type: 'directory',
+      children: []
+    };
+
+    const normalizePath = (value: string) => value.replace(/^\/+|\/+$/g, '');
+
+    const upsertChild = (parent: TreeNode, name: string, path: string, type: 'file' | 'directory') => {
+      let child = parent.children.find((node) => node.name === name);
+      if (!child) {
+        child = { name, path, type, children: [] };
+        parent.children.push(child);
+      } else if (type === 'directory' && child.type !== 'directory') {
+        child.type = 'directory';
+        child.children = child.children || [];
+      }
+      return child;
+    };
+
+    for (const item of files) {
+      const rawPath = item.path || item.name;
+      if (!rawPath) continue;
+      const cleaned = normalizePath(rawPath);
+      if (!cleaned) continue;
+      const parts = cleaned.split('/');
+      let current = root;
+      parts.forEach((part, index) => {
+        const isLast = index === parts.length - 1;
+        const nodeType: 'file' | 'directory' = isLast ? item.type : 'directory';
+        const nodePath = parts.slice(0, index + 1).join('/');
+        const child = upsertChild(current, part, nodePath, nodeType);
+        if (child.type === 'directory') {
+          current = child;
+        }
+      });
+    }
+
+    const sortNode = (node: TreeNode) => {
+      node.children.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'directory' ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      node.children.forEach(sortNode);
+    };
+
+    sortNode(root);
+    return root;
+  }, [files]);
+
+  const isExpanded = useCallback(
+    (path: string) => expandedFolders[path] ?? false,
+    [expandedFolders]
+  );
+
+  const toggleFolder = useCallback((path: string) => {
+    setExpandedFolders((prev) => ({
+      ...prev,
+      [path]: !(prev[path] ?? false)
+    }));
+  }, []);
+
+  const visibleNodes = useMemo<VisibleNode[]>(() => {
+    const result: VisibleNode[] = [];
+
+    const walk = (node: TreeNode, depth: number) => {
+      const isDirectory = node.type === 'directory';
+      const hasChildren = node.children.length > 0;
+      const expanded = isDirectory ? isExpanded(node.path) : false;
+
+      result.push({ node, depth, isDirectory, hasChildren, expanded });
+
+      if (isDirectory && expanded) {
+        node.children.forEach((child) => walk(child, depth + 1));
+      }
+    };
+
+    walk(treeRoot, 0);
+    return result;
+  }, [treeRoot, isExpanded]);
+
+  const handleNodeClick = useCallback(
+    (node: TreeNode) => {
+      if (node.type === 'directory') {
+        toggleFolder(node.path);
+        setSelectedFolder(node.path);
+      } else {
+        onFileSelect(node.path);
+      }
+    },
+    [onFileSelect, toggleFolder]
+  );
+
+  const handleNodeDelete = useCallback(
+    (node: TreeNode, e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      onDeleteFile(node.path);
+    },
+    [onDeleteFile]
+  );
 
   // Design mode state
   const [expandedSections, setExpandedSections] = useState({
@@ -372,6 +548,10 @@ export function Sidebar({
             setIsCreating(true);
             setCreateType('file');
             setNewFileName('');
+            const targetFolder = selectedFolder || '';
+            if (!isExpanded(targetFolder)) {
+              toggleFolder(targetFolder);
+            }
           }}
           title="New File"
         >
@@ -383,6 +563,10 @@ export function Sidebar({
             setIsCreating(true);
             setCreateType('directory');
             setNewFileName('');
+            const targetFolder = selectedFolder || '';
+            if (!isExpanded(targetFolder)) {
+              toggleFolder(targetFolder);
+            }
           }}
           title="New Folder"
         >
@@ -420,98 +604,60 @@ export function Sidebar({
           {isFilesExpanded && (
             <div className="ml-2">
               <div className="mb-px">
-                <div className="flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer">
-                  <ChevronDown size={12} className="mr-1 text-muted-foreground" />
-                  <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                  <span className="truncate">workspace</span>
-                </div>
-                
-                <div className="ml-4">
-                  {/* Create new file/folder input */}
-                  {isCreating && (
-                    <div className="flex items-center py-0.5 px-2 mb-1">
-                      {createType === 'directory' ? (
-                        <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                      ) : (
-                        <File size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                      )}
-                      <input
-                        type="text"
-                        value={newFileName}
-                        onChange={(e) => setNewFileName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && newFileName.trim()) {
-                            onCreateFile(newFileName.trim(), createType);
-                            setIsCreating(false);
-                            setNewFileName('');
-                          } else if (e.key === 'Escape') {
-                            setIsCreating(false);
-                            setNewFileName('');
-                          }
-                        }}
-                        onBlur={() => {
-                          if (newFileName.trim()) {
-                            onCreateFile(newFileName.trim(), createType);
-                          }
-                          setIsCreating(false);
-                          setNewFileName('');
-                        }}
-                        placeholder={createType === 'directory' ? 'Folder name' : 'File name'}
-                        className="flex-1 bg-background text-foreground text-xs border border-border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
-                        autoFocus
+                {visibleNodes.map((item) => {
+                  const { node, depth, isDirectory } = item;
+                  const isSelected = isDirectory && selectedFolder === node.path;
+                  const isActive = !isDirectory && activeFile === node.path;
+
+                  return (
+                    <div key={node.path || node.name}>
+                      <TreeRow
+                        item={item}
+                        isSelected={isSelected}
+                        isActive={isActive}
+                        onClick={handleNodeClick}
+                        onDelete={handleNodeDelete}
                       />
+                      {isCreating && selectedFolder === node.path && (
+                        <div
+                          className="flex items-center py-0.5 px-2 mb-1"
+                          style={{ paddingLeft: `${(depth + 1) * 12}px` }}
+                        >
+                          {createType === 'directory' ? (
+                            <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
+                          ) : (
+                            <File size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
+                          )}
+                          <input
+                            type="text"
+                            value={newFileName}
+                            onChange={(e) => setNewFileName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && newFileName.trim()) {
+                                onCreateFile(newFileName.trim(), createType, node.path || undefined);
+                                setIsCreating(false);
+                                setNewFileName('');
+                              } else if (e.key === 'Escape') {
+                                setIsCreating(false);
+                                setNewFileName('');
+                              }
+                            }}
+                            onBlur={() => {
+                              if (newFileName.trim()) {
+                                onCreateFile(newFileName.trim(), createType, node.path || undefined);
+                              }
+                              setIsCreating(false);
+                              setNewFileName('');
+                            }}
+                            placeholder={createType === 'directory' ? 'Folder name' : 'File name'}
+                            className="flex-1 bg-background text-foreground text-xs border border-border rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                            autoFocus
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                  
-                  {/* File list */}
-                  {files
-                    .filter(file => file.type === 'directory')
-                    .map((directory) => (
-                      <div
-                        key={directory.path || directory.name}
-                        className="flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer group"
-                        onClick={() => onFileSelect(directory.name)}
-                      >
-                        <Folder size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className="truncate flex-1">{directory.name}</span>
-                        <button
-                          className="opacity-0 group-hover:opacity-100 size-4 flex items-center justify-center text-muted-foreground hover:text-red-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteFile(directory.name);
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  
-                  {files
-                    .filter(file => file.type === 'file')
-                    .map((file) => (
-                      <div 
-                        key={file.path || file.name}
-                        className={`flex items-center py-0.5 px-2 hover:bg-muted rounded cursor-pointer group ${
-                          activeFile === file.name ? 'bg-muted' : ''
-                        }`}
-                        onClick={() => onFileSelect(file.name)}
-                      >
-                        <File size={16} className="mr-2 text-muted-foreground flex-shrink-0" />
-                        <span className={`truncate flex-1 ${activeFile === file.name ? 'text-foreground' : ''}`}>
-                          {file.name}
-                        </span>
-                        <button
-                          className="opacity-0 group-hover:opacity-100 size-4 flex items-center justify-center text-muted-foreground hover:text-red-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteFile(file.name);
-                          }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
-                </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -8,7 +8,7 @@ interface MobileFileSelectorProps {
   files: FileItem[];
   activeFile: string;
   onFileSelect: (fileName: string) => void;
-  onCreateFile: (name: string, type?: 'file' | 'directory') => void;
+  onCreateFile: (name: string, type?: 'file' | 'directory', path?: string) => void;
 }
 
 export function MobileFileSelector({ files, activeFile, onFileSelect, onCreateFile }: MobileFileSelectorProps) {

@@ -16,6 +16,7 @@ export default function BabyCursor() {
   const [chatPanelWidth] = useState(320);
   const [activeFile, setActiveFile] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [isMacElectron, setIsMacElectron] = useState(false);
   const [openFiles, setOpenFiles] = useState<{[key: string]: string}>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
@@ -184,6 +185,12 @@ Happy coding! 🚀`
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  useEffect(() => {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    setIsMacElectron(ua.includes('Electron') && platform.toLowerCase().includes('mac'));
+  }, []);
+
   // Handle design mode toggle
   useEffect(() => {
     setIsDesignMode(mobileView === 'design');
@@ -213,7 +220,7 @@ Happy coding! 🚀`
     
     // Load file content if not already loaded
     if (!openFiles[fileName]) {
-      const file = files.find(f => f.name === fileName);
+      const file = files.find(f => (f.path || f.name) === fileName || f.name === fileName);
       if (file && file.content !== undefined) {
         setOpenFiles(prev => ({
           ...prev,
@@ -464,14 +471,15 @@ Happy coding! 🚀`
     }
   };
 
-  const handleCreateFile = async (name: string, type: 'file' | 'directory' = 'file') => {
+  const handleCreateFile = async (name: string, type: 'file' | 'directory' = 'file', path?: string) => {
     try {
-      await createFile({ name, type, content: type === 'file' ? '' : undefined });
+      await createFile({ name, type, content: type === 'file' ? '' : undefined, path });
       await loadFiles();
       
       if (type === 'file') {
-        setActiveFile(name);
-        setOpenFiles(prev => ({ ...prev, [name]: '' }));
+        const filePath = path ? `${path}/${name}` : name;
+        setActiveFile(filePath);
+        setOpenFiles(prev => ({ ...prev, [filePath]: '' }));
       }
     } catch (error) {
       console.error('Failed to create file:', error);
@@ -592,11 +600,12 @@ Happy coding! 🚀`
   // Desktop Layout (unchanged)
   return (
     <div className="flex flex-col h-dvh bg-background text-foreground pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] overflow-hidden">
+      {isMacElectron && <div className="electron-titlebar" />}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         {!isPreviewFullscreen && (
           <div 
-            className="bg-card flex flex-col h-full text-foreground relative transition-all duration-300 select-none border-r border-border"
+            className="bg-card flex flex-col h-full text-foreground relative transition-colors duration-150 select-none border-r border-border"
             style={{ width: `${sidebarWidth}px` }}
           >
             <div className="absolute top-0 right-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/50 active:bg-primary transition-colors duration-150 ease-in-out"></div>
@@ -645,12 +654,12 @@ Happy coding! 🚀`
         {!isPreviewFullscreen && (
           <div className="flex h-full">
             <div 
-              className="flex-shrink-0 border-l border-border first:border-l-0 transition-all duration-300"
+              className="flex-shrink-0 border-l border-border first:border-l-0"
               style={{ minWidth: `${chatPanelWidth}px`, width: `${chatPanelWidth}px`, opacity: 1 }}
             >
               <div className="relative w-full h-full">
                 <div 
-                  className="flex flex-col bg-card h-full transition-all duration-300 relative overflow-hidden border-l border-border"
+                  className="flex flex-col bg-card h-full relative overflow-hidden border-l border-border"
                   style={{ width: `${chatPanelWidth}px` }}
                 >
                   <div className="absolute top-0 left-0 w-1 h-full cursor-col-resize z-10 hover:bg-primary/50 active:bg-primary transition-colors duration-150 ease-in-out"></div>
